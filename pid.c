@@ -38,3 +38,17 @@ void incre_pid_set_tuning(incre_pid *pid, float kp, float ki, float kd) {
   pid->Ki = ki;
   pid->Kd = kd;
 }
+
+void PositionalPD_reset(PositionalPD *pd) {
+  pd->current_error = 0.0f;
+  pd->last_error = 0.0f;
+  pd->output = 0.0f;
+}
+
+void incre_pid_reset(PositionalPD *pd) {
+  pd->current_error = 0.0f;
+  pd->last_error = 0.0f;
+  pd->previous_error = 0.0f;
+  pd->integral = 0.0f;
+  pd->output = 0.0f;
+}
