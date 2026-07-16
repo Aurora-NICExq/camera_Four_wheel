@@ -25,3 +25,16 @@ void incre_pid_init(incre_pid *pid, float kp, float ki, float kd,
   pid->output_limit = output_limit;
   pid->integral_limit = integral_limit;
 }
+
+// 运行时改参数
+
+void PositionalPD_set_tuning(PositionalPD *pid, int floatkp, float kd) {
+  pd->Kp = kp;
+  pd->Kd = kd;
+}
+
+void incre_pid_set_tuning(incre_pid *pid, float kp, float ki, float kd) {
+  pid->Kp = kp;
+  pid->Ki = ki;
+  pid->Kd = kd;
+}

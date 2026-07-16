@@ -46,7 +46,7 @@ float PositionalPD(PositionalPD *pd, float error);
 
 // 运行调参
 void incre_pid_set_tuning(incre_pid *pid, float kp, float ki, float kd);
-void PositionalPD_set_tuning(incre_pid *pid, floatkp, float kd);
+void PositionalPD_set_tuning(PositionalPD *pid, floatkp, float kd);
 
 // 复位
 
