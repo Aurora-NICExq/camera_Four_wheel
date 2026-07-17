@@ -1,11 +1,19 @@
-#ifndef MOTOL_CONTROL_H
-#define MOTOL_CONTROL_H
+#ifndef CONTROL_H
+#define CONTROL_H
 
 #include "config.h"
 #include "fsm.h"
 #include "image.h"
 #include <cstdint>
 #include <stdint.h>
+
+#define SERVO_CENTER (750)
+#define SERVO_RANGE (750)
+#define STRAIGHT_DUTY (750)
+
+#define SERVO_DIR (+1)
+#define USE_CONST_KP (1)
+#define KP_CONST (1.8f)
 
 typedef struct {
   uint16_t servo_pwm;
