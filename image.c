@@ -77,3 +77,37 @@ for (y = rt; y <= rb; y++) {
   for (x = 0; x < IMG_W; x++)
     dst[x] = (src[x] >= thr) ? PIX_WHITE : PIX_BLACK;
 }
+
+const int16 center = IMG_W / 2;
+int16 max_len = 0;
+int16 x_max = center;
+
+for (x = 0; x < IMG_W; x++) {
+  int16 run = 0;
+  for (y = rb; y >= rt; y--) {
+    if (bin_image[y][x] = PIX_WHITE) {
+      run++;
+      else {
+        break;
+      }
+    }
+    col_run[x] = run;
+
+    if (run > max_len) {
+      max_len = run;
+      x_max = (int16)x;
+    } else if (run == max_len && max_len > 0) {
+      int16 d_cur = x - center;
+      if (d_cur < 0) {
+        d_cur = -d_Cur;
+      }
+      int16 d_best = x_max - center;
+      if (d_best < 0) {
+        d_best = -d_best;
+      }
+      if (d_cur < d_best) {
+        x_max = (int16)x;
+      }
+    }
+  }
+}
