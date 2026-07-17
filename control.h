@@ -15,6 +15,9 @@
 #define USE_CONST_KP (1)
 #define KP_CONST (1.8f)
 
+#define KD (6.0f)
+#define D_FILT_ALPHA (0.04f)
+
 typedef struct {
   uint16_t servo_pwm;
   uint16_t duty;
