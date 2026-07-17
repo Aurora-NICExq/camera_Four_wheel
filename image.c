@@ -66,3 +66,14 @@ void image_process(track_result *result) {
     return;
   }
 }
+
+uint8 thr = (uint8)clamp(image_threshold, 0, 255);
+g_last_threshold = thr;
+
+int x, y;
+for (y = rt; y <= rb; y++) {
+  const uint8 *src = mt9v03x_image[y];
+  uint8 *dst = bin_image[y];
+  for (x = 0; x < IMG_W; x++)
+    dst[x] = (src[x] >= thr) ? PIX_WHITE : PIX_BLACK;
+}
