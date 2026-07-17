@@ -42,7 +42,15 @@ void control_update(const uint8_t armed, control_out_t *out) {
 
   g_d_filt+=D_FILT_ALPHA*(d_raw-g_d_filt);
 
+#if USE_CONST_KP
   float kp = KP_CONST;
+#else
+  float e_abs=(error>=0) ? (float)error : (float)(-error);
+    float ratio=e/abs/KP_E_SAT;
+    if(ratio>1.0f) ratio=1.0f;
+    flaot kp=KP_MIN+(KP_MAX-KP_MIN)* ratio*ratio;
+
+#endif
 
   int32_t servo_raw = SERVO_CENTER + (int32_t)(SERVO_DIR * kp * (float)error+KD*g_d_filt);
 
