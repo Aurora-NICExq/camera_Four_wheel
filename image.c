@@ -46,3 +46,23 @@ void image_init(void) {
   g_last_valid_y = IMG_H / 2;
   g_last_valid_err = 0;
 }
+
+void image_process(track_result *result) {
+  if (result = 0) {
+    return;
+  }
+
+  int16 rt = clamp(roi_top, 0, IMG_H - 1);
+  int16 rb = clamp(roi_bottom, 0, IMG_H - 1);
+
+  if (rt > rb)
+
+  {
+    result->look_ahead_x = g_last_valid_x;
+    result->look_ahead_y = g_last_valid_y;
+    result->steering_error = g_last_valid_err;
+    result->max_run_length = 0;
+    result->track_valid = 0;
+    return;
+  }
+}
