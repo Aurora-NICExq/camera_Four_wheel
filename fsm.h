@@ -4,7 +4,6 @@
 #include "config.h"
 #include "image.h"
 #include <stdint.h>
-
 typedef enum {
   ST_NORMAL = 0,
   ST_CROSS,
