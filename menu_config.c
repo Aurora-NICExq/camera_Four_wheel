@@ -38,49 +38,68 @@
 
 //====================================================================================================================
 // Your tunable globals.  These live in your control code (typically
-// cpu1_main.c) and MUST be `volatile`.
+// cpu0_main.c / control.c) and MUST be `volatile`.
 //
 // For quick MENU-ONLY testing without any control code, set
 // MENU_STANDALONE_TEST to 1 to define them here instead. Set it back to 0 for
 // the real car (control code owns them).
 //====================================================================================================================
-#define MENU_STANDALONE_TEST (0)
+#define MENU_STANDALONE_TEST (1)
 
 #if MENU_STANDALONE_TEST
-volatile float steer_kp = 3.5f, steer_kd = 1.2f;
-volatile float speed_kp = 2.0f, speed_ki = 0.5f;
-volatile int16_t base_speed = 800, max_speed = 1500;
-volatile int16_t servo_center = 750, servo_left = 650, servo_right = 850;
-volatile uint8_t motor_enable = 1;
-volatile int16_t encoder_left = 0, encoder_right = 0, line_error = 0;
-volatile uint32_t loop_time_us = 0;
-#else
-extern volatile float steer_kp;
-extern volatile float steer_kd;
-extern volatile float speed_kp;
-extern volatile float speed_ki;
-extern volatile int16_t base_speed;
-extern volatile int16_t max_speed;
-extern volatile int16_t servo_center;
-extern volatile int16_t servo_left;
-extern volatile int16_t servo_right;
-extern volatile uint8_t motor_enable; // example bool
+volatile float   steer_kp_min        = 1.0f;
+volatile float   steer_kp_max        = 3.2f;
+volatile float   steer_kp_e_sat      = 40.0f;
+volatile uint8_t steer_use_const_kp  = 0;
+volatile float   steer_kp_const      = 1.8f;
+volatile float   steer_kd            = 6.0f;
+volatile float   steer_d_filt_alpha  = 0.4f;
+volatile uint16_t speed_straight_duty = 4500;
+volatile uint16_t speed_hard_cap     = 6000;
+volatile uint16_t speed_min_turn     = 2600;
+volatile uint16_t speed_boost_duty   = 5200;
+volatile uint16_t speed_slew_up      = 120;
+volatile int16_t  image_threshold    = 128;
+volatile uint16_t servo_center       = 750;
+volatile uint16_t servo_range        = 110;
 
-// Read-only values shown on the Monitor page (updated by the control loop on
-// CPU1)
-extern volatile int16_t encoder_left;
-extern volatile int16_t encoder_right;
-extern volatile int16_t line_error;
-extern volatile uint32_t loop_time_us;
+volatile int16_t  mon_error          = 0;
+volatile uint16_t mon_duty           = 0;
+volatile uint16_t mon_valid_rows     = 0;
+volatile uint32_t mon_proc_us        = 0;
+#else
+extern volatile float   steer_kp_min;
+extern volatile float   steer_kp_max;
+extern volatile float   steer_kp_e_sat;
+extern volatile uint8_t steer_use_const_kp;
+extern volatile float   steer_kp_const;
+extern volatile float   steer_kd;
+extern volatile float   steer_d_filt_alpha;
+extern volatile uint16_t speed_straight_duty;
+extern volatile uint16_t speed_hard_cap;
+extern volatile uint16_t speed_min_turn;
+extern volatile uint16_t speed_boost_duty;
+extern volatile uint16_t speed_slew_up;
+extern volatile int16_t  image_threshold;
+extern volatile uint16_t servo_center;
+extern volatile uint16_t servo_range;
+
+extern volatile int16_t  mon_error;
+extern volatile uint16_t mon_duty;
+extern volatile uint16_t mon_valid_rows;
+extern volatile uint32_t mon_proc_us;
 #endif
 
 //====================================================================================================================
 // Pages  (order MUST match the menu_page_e enum in menu.h)
 //====================================================================================================================
 const menu_page_t menu_pages[PAGE_NUM] = {
-    {"SteerPID", PAGE_KIND_NORMAL}, {"SpeedPID", PAGE_KIND_NORMAL},
-    {"Speed", PAGE_KIND_NORMAL},    {"Servo", PAGE_KIND_NORMAL},
-    {"Monitor", PAGE_KIND_MONITOR}, {"System", PAGE_KIND_NORMAL},
+    {"SteerPID", PAGE_KIND_NORMAL},
+    {"Speed",    PAGE_KIND_NORMAL},
+    {"Image",    PAGE_KIND_NORMAL},
+    {"Servo",    PAGE_KIND_NORMAL},
+    {"Monitor",  PAGE_KIND_MONITOR},
+    {"System",   PAGE_KIND_NORMAL},
 };
 
 //====================================================================================================================
@@ -89,27 +108,32 @@ const menu_page_t menu_pages[PAGE_NUM] = {
 //====================================================================================================================
 const menu_item_t menu_items[] = {
     // ---- SteerPID : direction loop ----
-    MENU_F32("Kp", steer_kp, 0.0f, 50.0f, 0.1f, 3.5f, PAGE_STEER_PID),
-    MENU_F32("Kd", steer_kd, 0.0f, 50.0f, 0.1f, 1.2f, PAGE_STEER_PID),
-
-    // ---- SpeedPID ----
-    MENU_F32("Kp", speed_kp, 0.0f, 50.0f, 0.1f, 2.0f, PAGE_SPEED_PID),
-    MENU_F32("Ki", speed_ki, 0.0f, 50.0f, 0.05f, 0.5f, PAGE_SPEED_PID),
+    MENU_F32("Kp Min",     steer_kp_min,       0.0f, 20.0f,  0.1f,  1.0f,  PAGE_STEER_PID),
+    MENU_F32("Kp Max",     steer_kp_max,       0.0f, 20.0f,  0.1f,  3.2f,  PAGE_STEER_PID),
+    MENU_F32("Kp E Sat",   steer_kp_e_sat,     5.0f, 80.0f,  1.0f,  40.0f, PAGE_STEER_PID),
+    MENU_BOOL("Use Const Kp", steer_use_const_kp,     0,     PAGE_STEER_PID),
+    MENU_F32("Kp Const",   steer_kp_const,     0.0f, 10.0f,  0.1f,  1.8f,  PAGE_STEER_PID),
+    MENU_F32("Kd",         steer_kd,           0.0f, 30.0f,  0.1f,  6.0f,  PAGE_STEER_PID),
+    MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, 0.4f,  PAGE_STEER_PID),
 
     // ---- Speed ----
-    MENU_I16("Base", base_speed, 0, 3000, 10, 800, PAGE_SPEED),
-    MENU_I16("Max", max_speed, 0, 5000, 10, 1500, PAGE_SPEED),
-    MENU_BOOL("Motor En", motor_enable, 1, PAGE_SPEED),
+    MENU_U16("Straight",   speed_straight_duty, 1000, 10000, 50,  4500, PAGE_SPEED),
+    MENU_U16("Hard Cap",   speed_hard_cap,      1000, 10000, 50,  6000, PAGE_SPEED),
+    MENU_U16("Min Turn",   speed_min_turn,      1000, 10000, 50,  2600, PAGE_SPEED),
+    MENU_U16("Boost",      speed_boost_duty,    1000, 10000, 50,  5200, PAGE_SPEED),
+    MENU_U16("Slew Up",    speed_slew_up,       10,   1000,  10,  120,  PAGE_SPEED),
+
+    // ---- Image ----
+    MENU_I16("Threshold", image_threshold, 0, 255, 1, 128, PAGE_IMAGE),
 
     // ---- Servo ----
-    MENU_I16("Center", servo_center, 500, 1000, 1, 750, PAGE_SERVO),
-    MENU_I16("Left Lim", servo_left, 500, 1000, 1, 650, PAGE_SERVO),
-    MENU_I16("Right Lim", servo_right, 500, 1000, 1, 850, PAGE_SERVO),
+    MENU_U16("Center", servo_center, 500, 1000, 1, 750, PAGE_SERVO),
+    MENU_U16("Range",  servo_range,  30,  200,  1, 110, PAGE_SERVO),
 
     // ---- System : actions only ----
-    MENU_ACTION("Save", menu_action_save, PAGE_SYSTEM),
-    MENU_ACTION("Load", menu_action_load, PAGE_SYSTEM),
-    MENU_ACTION("Restore Def", menu_action_defaults, PAGE_SYSTEM),
+    MENU_ACTION("Save",         menu_action_save,     PAGE_SYSTEM),
+    MENU_ACTION("Load",         menu_action_load,     PAGE_SYSTEM),
+    MENU_ACTION("Restore Def",  menu_action_defaults, PAGE_SYSTEM),
 };
 const uint16_t menu_item_count =
     (uint16_t)(sizeof(menu_items) / sizeof(menu_items[0]));
@@ -118,10 +142,10 @@ const uint16_t menu_item_count =
 // Monitor fields  (live, read-only ; label + value, refreshed ~10 Hz)
 //====================================================================================================================
 const monitor_field_t menu_monitor_fields[] = {
-    {"Enc L", (const void *)&encoder_left, MON_I16},
-    {"Enc R", (const void *)&encoder_right, MON_I16},
-    {"Error", (const void *)&line_error, MON_I16},
-    {"Loop us", (const void *)&loop_time_us, MON_U32},
+    {"Error",     (const void *)&mon_error,      MON_I16},
+    {"Duty",      (const void *)&mon_duty,       MON_U16},
+    {"ValidRows", (const void *)&mon_valid_rows, MON_U16},
+    {"Proc us",   (const void *)&mon_proc_us,    MON_U32},
 };
 const uint16_t menu_monitor_count =
     (uint16_t)(sizeof(menu_monitor_fields) / sizeof(menu_monitor_fields[0]));

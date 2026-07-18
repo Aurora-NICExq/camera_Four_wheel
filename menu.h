@@ -31,8 +31,8 @@ typedef enum
 typedef enum
 {
     PAGE_STEER_PID,
-    PAGE_SPEED_PID,
     PAGE_SPEED,
+    PAGE_IMAGE,
     PAGE_SERVO,
     PAGE_MONITOR,
     PAGE_SYSTEM,
@@ -109,7 +109,7 @@ extern const uint16_t        menu_monitor_count;
 void menu_init(void);       // call once on CPU0 after clock_init()/debug_init(); loads flash or applies defaults
 void menu_task(void);       // call every CPU0 main-loop iteration; no delays, no busy-waits
 
-// These may be used directly as ACTION functions in menu_config.c (or wrap them in your own).
+// These four may be used directly as ACTION functions in menu_config.c (or wrap them in your own).
 void menu_action_save(void);        // serialize live values -> flash  (STALLS the CPU; only call when stopped)
 void menu_action_load(void);        // flash -> live values (if the record is valid)
 void menu_action_defaults(void);    // live values <- table defaults
