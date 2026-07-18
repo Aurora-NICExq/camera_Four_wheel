@@ -57,3 +57,47 @@ static void enter_state(fsm_state_t to, int16_t trigger) {
   g_exit_confirm = 0;
   g_just_entered = 1;
 }
+
+static uint8_t count_lost_rows(const uint8_t* lost,uint8_t lo,uint8_t hi,uint8_t valid){
+    uint8_t r;
+    uint8_t n=0;
+    if (hi>valid) {
+        hi=valid;
+    }
+    for (r=lo; r<hi; r++) {
+        if (lost[r]) {
+            n++;
+        }
+    }
+    return n;
+}
+
+fsm_state_t fsm_update(const track_info_t* ti){
+    g_frame++;
+    g_frame_in_state++;
+    g_just_entered=0;
+    if (g_cooldown>0) {
+        g_cooldown--;
+    }
+
+    const state_contract_t* ct = fsm_contract();
+
+    uint8_t raw[DET_NUM];
+
+    raw[0] = ti->det_cross;
+    raw[1] = ti->det_ring_left;
+    raw[2] = ti->det_ring_right;
+    raw[3] = ti->det_zebra;
+    raw[4] = ti->det_ramp;
+
+    uint8_t mask_bits=ct->detector_mask;
+
+    if (g_cooldown>0) {
+        mask_bits|=COOLDOWN_MASK;
+    }
+
+    uint8_t i;
+    for (i=0; i<DET_NUM;i++) {
+    
+    }
+}
