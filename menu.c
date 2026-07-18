@@ -5,12 +5,12 @@
  *   - navigation state machine  (page list -> item list -> edit ; plus full-screen Monitor mode)
  *   - cursor + scrolling, with PARTIAL dirty-line redraws only (never clears the screen per frame)
  *   - numeric edit with a WORKING COPY : the live volatile global is written only when editing finishes,
- *     so the control loop on CPU1 never observes a half-adjusted value
+ *     so the control loop on CPU0 never observes a half-adjusted value
  *   - table-driven flash save / load / defaults (magic + version + count + checksum)
  *
  * Contains NO SeekFree calls -- every hardware action goes through menu_port_*().
  *
- * OLED adaptation: on a 240x320 screen with 6x8 font (40 cols x 40 rows),
+ * 2-inch IPS200 adaptation: 320x240, 8x16 font → 40 cols × 15 rows,
  *   - the cursor is indicated by a "> " prefix on selected rows
  *   - the title bar is decorated as "== NAME =="
  *   - edit mode title is "[E] name"
@@ -20,14 +20,14 @@
 #include <string.h>
 
 //====================================================================================================================
-// Layout  (240x320, 6x8 font → 40 cols × 40 rows)
+// Layout  (IPS200 320x240, 8x16 font → 40 cols × 15 rows)
 //====================================================================================================================
-#define CONTENT_ROWS      (MENU_ROWS - 1)       // row 0 is the title bar
-#define VALUE_COL         (20)                  // value field starts at column 20
-#define VALUE_WIDTH       (MENU_COLS - VALUE_COL)  // 20
-#define MENU_MONITOR_MAX  (32)                   // max monitor fields the shadow buffer supports
-#define MENU_FLASH_MAX_WORDS (64)                // magic+version+count + params + checksum must fit here
-#define KEY_STEP_MULT     (10.0f)                // long-press auto-repeat step multiplier
+#define CONTENT_ROWS      (MENU_ROWS - 1)       // row 0 is the title bar, rows 1..14 hold list content
+#define VALUE_COL         (24)                  // value field starts at column 24 (name area is cols 0-23)
+#define VALUE_WIDTH       (MENU_COLS - VALUE_COL)  // 16
+#define MENU_MONITOR_MAX  (14)                  // max monitor fields the shadow buffer supports
+#define MENU_FLASH_MAX_WORDS (64)               // magic+version+count + params + checksum must fit here
+#define KEY_STEP_MULT     (10.0f)               // long-press auto-repeat step multiplier
 
 //====================================================================================================================
 // State
@@ -143,7 +143,7 @@ static void item_set(const menu_item_t *it, float v)
 }
 
 //====================================================================================================================
-// Text formatting helpers  (no sprintf : numbers go through the oled show functions in the port)
+// Text formatting helpers  (no sprintf : numbers go through the ips200 show functions in the port)
 //====================================================================================================================
 
 // Build a full-width (MENU_COLS) space-padded label so the highlight bar spans the whole row.
@@ -156,7 +156,7 @@ static void build_label(char *dst, const char *name)
         for (i = 0; i < MENU_COLS && name[i]; i++) dst[i] = name[i];
 }
 
-// OLED title: "== NAME =="
+// Title: "== NAME =="
 static void draw_title(const char *txt)
 {
     char t[MENU_COLS + 1];
@@ -170,7 +170,7 @@ static void draw_title(const char *txt)
     menu_port_draw_text(0, 0, t, MENU_STYLE_TITLE);
 }
 
-// OLED edit title: "[E] name"
+// Edit title: "[E] name"
 static void draw_title_edit(const char *name)
 {
     char t[MENU_COLS + 1];
@@ -208,7 +208,7 @@ static void draw_item_row(uint8_t list_index, uint8_t screen_row, bool selected,
 
     build_label(label, it->name);
 
-    // OLED cursor: prefix "> " on selected / editing rows
+    // cursor: prefix "> " on selected / editing rows
     if (selected || editing)
     {
         label[0] = '>';
@@ -398,7 +398,7 @@ static void item_enter(void)
 
     if (it->type == ITEM_ACTION)
     {
-        if (it->action) it->action();               // action may change s_nav (e.g. Show Image)
+        if (it->action) it->action();               // action may change s_nav (e.g. Save draws title)
         return;
     }
     if (it->type == ITEM_BOOL)
@@ -442,7 +442,6 @@ static void edit_cancel(void)
     draw_title(menu_pages[s_cur_page].name);
     draw_item_row(s_item_cursor, (uint8_t)((s_item_cursor - s_item_top) + 1), true, false);  // shows unchanged live value
 }
-
 
 //====================================================================================================================
 // Flash save / load / defaults  (table-driven -> adding a param needs no change here)
@@ -546,7 +545,6 @@ void menu_action_defaults(void)
     if (s_nav == NAV_ITEMLIST) redraw_visible_values();
 }
 
-
 //====================================================================================================================
 // Public entry points
 //====================================================================================================================
@@ -564,6 +562,7 @@ void menu_init(void)
 void menu_task(void)
 {
     menu_key_event_t ev;
+    menu_port_key_scan();
     menu_port_scan_keys(&ev);
 
     switch (s_nav)
