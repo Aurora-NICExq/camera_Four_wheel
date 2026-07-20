@@ -12,11 +12,11 @@
 #include <stdbool.h>
 
 //--------------------------------------------------------------------------------------------------------------------
-// Screen geometry : 2.0" IPS200, 320x240, 8x16 font  ->  40 columns x 15 rows.
-// Coordinates handed to the draw functions are CHARACTER cells (col 0..39, row 0..14).
+// Screen geometry : 2.0" IPS200 竖屏 240x320, 8x16 font  ->  30 columns x 20 rows.
+// Coordinates handed to the draw functions are CHARACTER cells (col 0..29, row 0..19).
 //--------------------------------------------------------------------------------------------------------------------
-#define MENU_COLS   (40)       // 320 / 8 = 40  (with IPS200 8X16 font)
-#define MENU_ROWS   (15)       // 240 / 16 = 15
+#define MENU_COLS   (30)       // 240 / 8 = 30  (竖屏宽)
+#define MENU_ROWS   (20)       // 320 / 16 = 20 (竖屏高)
 
 // Drawing style for a text/number cell run. On a colour IPS200 the port translates
 // these into text-level indicators (cursor marker, title decoration, edit prefix).

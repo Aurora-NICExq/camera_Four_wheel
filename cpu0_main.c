@@ -6,18 +6,19 @@
  * 帧就是全系统唯一时钟（FRAMES_PER_SECOND），任何逻辑不使用毫秒。
  *
  * 职责边界：本文件只做"搬运与门闸"——
- *   图像结果 → fsm → control → motor 的数据搬运；
- *   解锁/失控/调试断油三道门闸；
- *   绝不出现任何元素判断逻辑（那些只属于 fsm.c 的唯一 switch）。
+ *   图像结果 → control → motor 的数据搬运（直道+转弯，无状态机）；
+ *   解锁（菜单触发）/失控/调试断油三道门闸。
  ********************************************************************************************************************/
 #include "zf_common_headfile.h"
 #include "config.h"
 #include "image.h"
-#include "fsm.h"
 #include "control.h"
 #include "motor.h"
 #include "display.h"
-#include "perf.h"
+#include "menu.h"
+
+/* 精简版（直道+转弯）：无状态机。数据流 = 图像 → 控制 → 电机；
+ * 失控保护（image_track_invalid + 相机看门狗）在本文件内，独立于任何决策逻辑。 */
 
 #pragma section all "cpu0_dsram"
 // 将本语句与#pragma section all restore语句之间的全局变量都放在CPU0的RAM中
@@ -25,6 +26,12 @@
 /* 帧间共享（仅本文件内）：上一帧下发占空比 —— image_process 的权重混合输入 */
 static uint16_t     g_duty_prev;
 static track_info_t g_track;        /* 每帧图像结果（约 750 字节，静态分配，无动态内存） */
+
+/* 调试菜单常驻独占 IPS200 与 4 个按键（UP/DOWN/ENTER/BACK），故解锁不再走独立按键：
+ * 菜单 System 页的 "Arm/Disarm" 动作置位下面这个一次性请求，主循环每帧消费一次。
+ * 非持久（不写 Flash）——车永远上电即上锁（safe），符合 fail-safe 优先原则。 */
+static volatile uint8_t g_arm_toggle_req;
+void menu_action_arm(void) { g_arm_toggle_req = 1u; }
 
 /*-------------------------------------------------------------------------------------------------------------------
  * startup_beep — 上电 2 s 等待 + 蜂鸣提示（发生在相机启动前，是全工程唯一的毫秒计时）
@@ -51,8 +58,8 @@ int core0_main(void)
     /* ---- 外设初始化（顺序：执行器先归零位，再开显示，最后开相机） ---- */
     motor_hw_init();                // 舵机中位 + 电机 0 + 蜂鸣器 + 按键 + 系统定时器
     display_init();                 // IPS200 + 无线串口
-    fsm_init();
     control_init();
+    menu_init();                    // 接管 IPS200 整屏 + 载入 Flash 调参（或表内默认）
     g_duty_prev = 0;
 
     startup_beep();                 // 2 s 上电等待
@@ -74,6 +81,7 @@ int core0_main(void)
     uint8_t  armed      = 0;        /* 解锁状态：0 = 电机永远 0                            */
     uint16_t fail_cnt   = 0;        /* 失控保护连续帧计数（任何机制不得屏蔽它）             */
     uint8_t  severe_fail_cnt = 0;   /* 全白/严重过曝快速保护计数                           */
+    uint32_t frame_count = 0;       /* 本文件自己的帧计数（遥测行号 + 分频时基）           */
     uint32_t last_frame_us = hal_time_us(); /* 相机活性看门狗；独立于帧时基                  */
     control_out_t out   = {0};
 #if TEST_COAST
@@ -91,38 +99,28 @@ int core0_main(void)
             {
                 armed = 0;
                 motor_stop();
-                display_chirp(ST_FAULT);  /* 相机恢复出帧后播放长鸣；武装标志保持 SAFE */
+                display_chirp_fault();  /* 相机恢复出帧后播放长鸣；武装标志保持 SAFE */
             }
             continue;
         }
 
         last_frame_us = hal_time_us();
+        frame_count++;
 
-        uint32_t t0 = hal_time_us();
-        PERF_BEGIN(PF_TOTAL);
 
         /* ================= 1. 图像流水线（纯逻辑，与 replay 逐位一致） ================= */
         image_process((const uint8_t (*)[IMG_W])mt9v03x_image, g_duty_prev, &g_track);
 
-        /* ================= 2. 状态机（唯一 switch 在 fsm.c 内） ================= */
-        PERF_BEGIN(PF_FSM);
-        fsm_state_t st = fsm_update(&g_track);
-        PERF_END(PF_FSM);
-        if (fsm_state_just_entered())
+        /* ================= 2. 解锁：来自菜单 "Arm/Disarm" 动作（按键由菜单独占，见文件顶部） =================
+         * 按键扫描（key_scanner）由 menu_task() 内部完成，本处不再自行扫描，避免与菜单争用按键。 */
+        if (g_arm_toggle_req)
         {
-            display_chirp(st);      /* fsm 无 I/O：提示音由这里代发 */
-        }
-
-        /* ================= 3. 按键：解锁 / 翻页 ================= */
-        hal_key_scan();
-        if (hal_key_pressed(KEY_IDX_ARM))
-        {
+            g_arm_toggle_req = 0;
             armed = (uint8_t)!armed;
             if (armed)
             {
-                /* 重新解锁 = 全新一轮：状态机、控制器、失控计数一起复位；
+                /* 重新解锁 = 全新一轮：控制器（PD 记忆 + 斜坡）、失控计数一起复位；
                  * 占空比从 0 沿升斜坡爬升（软启动就是斜坡本身） */
-                fsm_init();
                 control_init();
                 fail_cnt = 0;
                 severe_fail_cnt = 0;
@@ -135,12 +133,8 @@ int core0_main(void)
                 motor_stop();
             }
         }
-        if (hal_key_pressed(KEY_IDX_PAGE))
-        {
-            display_next_page();
-        }
 
-        /* ================= 4. 失控保护（最高优先级，永不被去抖/冷却/状态屏蔽） ================= */
+        /* ================= 3. 失控保护（最高优先级，独立于任何决策逻辑） ================= */
         uint8_t severe_image = 0;
         if (image_track_invalid(&g_track, &severe_image))
         {
@@ -169,21 +163,11 @@ int core0_main(void)
         {
             armed = 0;              /* 全黑/全白/冲出赛道：断油上锁，等待人工重新解锁 */
             motor_stop();
-            display_chirp(ST_FAULT);/* 长鸣提示图像失效；保持上锁直到人工重新解锁 */
+            display_chirp_fault();  /* 长鸣提示图像失效；保持上锁直到人工重新解锁 */
         }
 
-        /* FSM 元素阶段超时后会先低速恢复；恢复仍失败才请求解除武装。 */
-        if (armed && fsm_fault_request())
-        {
-            armed = 0;
-            motor_stop();
-            display_chirp(ST_FAULT);
-        }
-
-        /* ================= 5. 控制律 ================= */
-        PERF_BEGIN(PF_CONTROL);
+        /* ================= 4. 控制律（转向 PD + 定速开环，无状态机） ================= */
         control_update(&g_track, armed, &out);
-        PERF_END(PF_CONTROL);
 
 #if TEST_COAST
         /* 滑行标定模式：恒速巡航，按键或黑标记条触发切油；转向照常工作。
@@ -198,7 +182,7 @@ int core0_main(void)
         }
 #endif
 
-        /* ================= 6. 输出门闸 → 硬件 ================= */
+        /* ================= 5. 输出门闸 → 硬件 ================= */
         {
             uint16_t duty_final = out.duty;
 #if DEBUG_NO_DRIVE
@@ -208,16 +192,12 @@ int core0_main(void)
             g_duty_prev = duty_final;
         }
 
-        /* ================= 7. 耗时测量 + 显示/遥测（分频限流，不阻塞） ================= */
-        PERF_END(PF_TOTAL);
-        uint32_t proc_us = hal_time_us() - t0;
-        PERF_BEGIN(PF_DISPLAY);
-        display_update((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track, &out, proc_us, armed);
-        display_telemetry(&g_track, &out, fsm_frame_count());
-        PERF_END(PF_DISPLAY);
-        PERF_COMMIT();          /* 本帧各阶段耗时结算；报表帧顺带发送统计（见 perf.c） */
+        /* ================= 6. 菜单 + 遥测 + 蜂鸣（分频限流，不阻塞） ================= */
+        menu_task();            /* 调试菜单：扫按键 + 只重绘脏行（常驻屏幕） */
+        display_update();       /* 蜂鸣器提示音（不碰屏幕） */
+        display_telemetry(&g_track, &out, frame_count);
 
-        /* ================= 8. 释放本帧，等待下一帧 ================= */
+        /* ================= 7. 释放本帧，等待下一帧 ================= */
         mt9v03x_finish_flag = 0;
     }
 }

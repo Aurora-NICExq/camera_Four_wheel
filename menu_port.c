@@ -1,65 +1,26 @@
 /*********************************************************************************************************************
- * menu_port.c  --  SeekFree TC264 implementation of the menu hardware interface : 2" IPS200 (320x240, SPI).
- *                  THIS IS THE ONLY FILE THAT INCLUDES SEEKFREE HEADERS.
- *===================================================================================================================
- *  IPS200-specific notes
- *  - Resolution: 320x240 pixels → 40 cols × 15 rows with IPS200_8X16_FONT
- *  - Colour LCD: no colour highlight bars; cursor is shown with a ">" prefix and title decorations
- *  - No camera preview (menu is for parameter tuning only)
- *===================================================================================================================
- *  INTEGRATION (3 edits to your project)
- *-------------------------------------------------------------------------------------------------------------------
- *  1) cpu0_main.c  (the display / menu core)
- *          #include "menu.h"
- *          ...
- *          clock_init();
- *          debug_init();
- *          menu_init();                       // sets up display + keys + loads flash or defaults
- *          cpu_wait_event_ready();
- *          while (TRUE) { menu_task(); }       // non-blocking, call as fast as the loop runs
- *
- *  2) Reuses existing key_scanner (already called in motor_hw_init via hal_key_scan).
- *     No ISR changes needed. Time base uses system_getval_us() / 1000.
- *
- *  3) The menu writes tunables straight into volatiles (committed only when an edit finishes).
- *     Your control code reads the same volatiles -- no cross-core hazard.
- *
- *  Note on cores: menu_port_init() runs on CPU0, same core as menu_task, so the time base
- *  is a CPU0-local concern -- no cross-core hazard on the time base.
+ * menu_port.c — 菜单硬件移植层：2" IPS200 竖屏 (240x320 SPI, 30×20 字符)。唯一包含逐飞头文件的菜单文件。
+ * 复用 motor.c 已启的 key_scanner 与 system 定时器；换 MCU/库只需改本文件。
  ********************************************************************************************************************/
-#include "zf_common_headfile.h"     /* umbrella: ips200, key, flash, zf types */
+#include "zf_common_headfile.h"
 #include "menu_port.h"
 
-//====================================================================================================================
-// Configuration
-//====================================================================================================================
-#define MENU_FLASH_SECTOR   (0)      // matches the official SeekFree TC264 EEPROM demo (E08): sector 0 ...
-#define MENU_FLASH_PAGE     (8)      // ... page 8   (DFLASH has 12 pages; pick a page nothing else uses)
-#define KEY_REPEAT_MS       (120)    // long-press auto-repeat period (after the library's 1 s long-press threshold)
+#define MENU_FLASH_SECTOR   (0)      // 与逐飞 EEPROM demo 一致：sector 0 / page 8（DFLASH 挑一页别人不用的）
+#define MENU_FLASH_PAGE     (8)
+#define KEY_REPEAT_MS       (120)    // 长按自动重复周期
 
-//====================================================================================================================
-// Time base -- uses the STM system timer (already started by motor_hw_init's system_start())
-//====================================================================================================================
-uint32_t menu_port_millis(void)
+uint32_t menu_port_millis(void)     // STM 系统定时器（motor_hw_init 已 system_start）
 {
     return (uint32_t)(system_getval_us() / 1000u);
 }
 
-//====================================================================================================================
-// Init
-//====================================================================================================================
-void menu_port_init(void)
+void menu_port_init(void)           // 8x16 字体 → 30 列 × 20 行（竖屏）
 {
-    // Display : 2.0" IPS200, 320x240, SPI.
-    // Use 8x16 font to get 40 cols × 15 rows (320/8=40, 240/16=15).
-    ips200_set_dir(IPS200_PORTAIT);
+    /* 方向已在 display_init() 里、ips200_init 之前设为 IPS200_PORTAIT。此处只设字体。 */
     ips200_set_font(IPS200_8X16_FONT);
     ips200_clear();
 }
 
-//====================================================================================================================
-// Key scanner wrapper -- reuses the existing key_scanner in motor.c
-//====================================================================================================================
 void menu_port_key_scan(void)
 {
     key_scanner();

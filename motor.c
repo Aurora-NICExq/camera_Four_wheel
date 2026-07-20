@@ -1,14 +1,5 @@
 /*********************************************************************************************************************
- * 模块：motor.c — 硬件执行层（唯一直接触碰舵机/电机 PWM 的文件）
- *
- * 本文件包含逐飞库头文件（上层逻辑模块 image/fsm/control 绝不允许）。
- * 引脚全部来自 user/pins.h（填完 FILL_ME 并定义 PINS_CONFIGURED 前无法编译，这是故意的）。
- *
- * 使用的逐飞 API（均已核对真实头文件签名）：
- *   pwm_init / pwm_set_duty                （zf_driver_pwm.h，PWM_DUTY_MAX = 10000）
- *   gpio_init / gpio_set_level             （zf_driver_gpio.h）
- *   key_init / key_scanner / key_get_state / key_clear_state（zf_device_key.h）
- *   system_start / system_getval_us()      （zf_driver_timer.h，STM 系统定时器）
+ * motor.c — 硬件执行层（唯一直接触碰舵机/电机 PWM 的文件；包含逐飞库头文件）。引脚见 pins.h。
  ********************************************************************************************************************/
 #include "zf_common_headfile.h"
 #include "pins.h"
@@ -29,8 +20,16 @@ void motor_hw_init(void)
 {
     system_start();                                             /* STM 定时器：hal_time_us() 时基     */
 
-    pwm_init(PIN_SERVO_PWM, SERVO_PWM_HZ, SERVO_CENTER);        /* 舵机：50 Hz，上电即中位            */
-    pwm_init(PIN_MOTOR_PWM, MOTOR_PWM_HZ, 0);                   /* 电机：~17 kHz，上电即 0（唯一一路）*/
+    pwm_init(PIN_SERVO_PWM,  SERVO_PWM_HZ, SERVO_CENTER);       /* 舵机：50 Hz，上电即中位            */
+    pwm_init(PIN_MOTOR1_PWM, MOTOR_PWM_HZ, 0);                  /* 电机1：~17 kHz，上电即 0           */
+    pwm_init(PIN_MOTOR2_PWM, MOTOR_PWM_HZ, 0);                  /* 电机2：~17 kHz，上电即 0           */
+
+    /* 方向 GPIO：上电即前进电平（MOTOR_DIR_FORWARD_LEVEL=0 → 低电平正转）。
+     * 本车滑行式开环、永不反转 —— 两路 DIR 初始化后保持不变，两路 PWM 始终写入同一占空比。 */
+    gpio_init(PIN_MOTOR1_DIR, GPO,
+              MOTOR_DIR_FORWARD_LEVEL ? GPIO_HIGH : GPIO_LOW, GPO_PUSH_PULL);
+    gpio_init(PIN_MOTOR2_DIR, GPO,
+              MOTOR_DIR_FORWARD_LEVEL ? GPIO_HIGH : GPIO_LOW, GPO_PUSH_PULL);
 
 #if ENABLE_HW_BRAKE
     /* 驱动板刹车脚（实验挂钩，默认不编译；任何减速逻辑不得依赖它） */
@@ -54,7 +53,8 @@ void motor_apply(uint16_t servo_pwm, uint16_t duty)
     {
         duty = PWM_DUTY_MAX;
     }
-    pwm_set_duty(PIN_MOTOR_PWM, duty);
+    pwm_set_duty(PIN_MOTOR1_PWM, duty);                        /* 两路并联同速：无电子差速 */
+    pwm_set_duty(PIN_MOTOR2_PWM, duty);
 }
 
 /*-------------------------------------------------------------------------------------------------------------------
@@ -62,7 +62,8 @@ void motor_apply(uint16_t servo_pwm, uint16_t duty)
  *------------------------------------------------------------------------------------------------------------------*/
 void motor_stop(void)
 {
-    pwm_set_duty(PIN_MOTOR_PWM, 0);
+    pwm_set_duty(PIN_MOTOR1_PWM, 0);
+    pwm_set_duty(PIN_MOTOR2_PWM, 0);
 }
 
 /*-------------------------------------------------------------------------------------------------------------------
