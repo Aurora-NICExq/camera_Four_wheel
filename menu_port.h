@@ -1,10 +1,4 @@
-/*********************************************************************************************************************
- * menu_port.h  --  Hardware abstraction interface for the menu engine.
- *
- * The engine (menu.c) talks to hardware ONLY through the functions declared here. This header is
- * hardware independent (pure <stdint.h>). The single implementation menu_port.c is the ONLY file that
- * includes SeekFree headers -- so porting to another MCU/library means editing menu_port.c and nothing else.
- ********************************************************************************************************************/
+/* menu_port.h - menu hardware abstraction */
 #ifndef _menu_port_h_
 #define _menu_port_h_
 

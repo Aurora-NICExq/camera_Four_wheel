@@ -11,7 +11,7 @@
 |------|------|
 | ADS v1.10.x | Infineon AURIX Development Studio |
 | SeekFree TC264 库 | 随 ADS 工程提供（`libraries/`） |
-| 本仓库源码 | 根目录或 `output_user_code/`（二者一致） |
+| 本仓库源码 | 根目录 `.c/.h` |
 
 本仓库**不包含** `.project`、链接脚本、逐飞库——需基于已有 ADS 工程导入。
 
@@ -27,21 +27,18 @@
 config.h  control.c/h  cpu0_main.c  cpu0_main.h  cpu1_main.c
 display.c/h  image.c/h  isr.c/h  isr_config.h
 menu.c/h  menu_config.c  menu_port.c/h  motor.c/h  pins.h
-hybrid_8n_longest_col/hybrid_track.c
-hybrid_8n_longest_col/hybrid_track.h
 ```
 
 或直接：
 
 ```bash
-cp -R output_user_code/*  <你的ADS工程>/user/
-cp -R output_user_code/hybrid_8n_longest_col  <你的ADS工程>/user/
+cp *.c *.h  <你的ADS工程>/user/
 ```
 
 ### 2.2 ADS 工程设置
 
-1. 在 ADS 中把上述 `.c` 加入 CPU0 编译（hybrid_track.c 不要忘记）
-2. Include 路径包含 `user/` 与 `user/hybrid_8n_longest_col`
+1. 在 ADS 中把上述 `.c` 加入 CPU0 编译
+2. Include 路径包含 `user/`
 3. 确认 `zf_common_headfile.h`、MT9V03X、IPS200 驱动已在工程中
 4. **不要**改 `#include` 路径——本代码已按逐飞习惯写相对路径
 
@@ -111,10 +108,7 @@ IPS200 使用 **SPI 竖屏**；`display_init` 已设 `IPS200_PORTAIT`。
 
 ## 6. 与 Git 分支
 
-当前完整可烧录代码在分支 **`output-user-code-portrait`**：
-
-- 根目录源码 = `output_user_code/`
-- 学习文档 = `docs/steps/`
+当前完整可烧录代码在根目录 `.c/.h`；学习文档在 `docs/steps/`。
 
 ---
 

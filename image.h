@@ -1,10 +1,4 @@
-/*********************************************************************************************************************
- * 模块：image.h — 图像流水线与元素检测器（纯逻辑层）
- *
- * 约束：本头文件及 image.c 不得包含任何 MCU / 逐飞库头文件，只允许 <stdint.h> 与 config.h。
- *
- * 精简版（直道+转弯）：已移除十字/环岛/坡道检测器与曲率估计；只保留边线跟踪 + 加权转向误差。
- ********************************************************************************************************************/
+/* image.h - track_info_t + 18th 最长白列巡线 detectors */
 #ifndef IMAGE_H
 #define IMAGE_H
 
@@ -13,7 +7,6 @@
 
 typedef struct
 {
-    /* ---- 逐行几何（仅 [0, valid_rows) 区间有效） ---- */
     uint8_t  left [IMG_H];
     uint8_t  right[IMG_H];
     uint8_t  mid  [IMG_H];
@@ -21,16 +14,36 @@ typedef struct
     uint8_t  left_lost [IMG_H];
     uint8_t  right_lost[IMG_H];
 
-    /* ---- 帧级汇总 ---- */
     uint8_t  valid_rows;
-    uint8_t  longest_col;       /* 锚定白列（跟踪算法内部用：起种 + 搜边基准）      */
-    int16_t  error;             /* 加权中线转向误差（control.c 唯一输入）           */
-    uint8_t  both_lost_rows;    /* 双边同时丢失的行数（失控保护输入）              */
+    uint8_t  longest_col;
+    int16_t  error;
+    int16_t  curvature;
+    uint8_t  both_lost_rows;
     uint8_t  threshold;
+
+    uint8_t  det_cross;
+    uint8_t  det_ring_left;
+    uint8_t  det_ring_right;
+    uint8_t  det_ramp;
+    uint8_t  inflect_row;       /* 十字补线起始行；无则 0xFF */
+    int16_t  det_value;
+
+    /* 十字补线（18th Cross_Detect 覆盖区间） */
+    uint8_t  cross_filled[IMG_H]; /* 1=该行坐标被十字连接覆盖 */
+    uint8_t  cross_valid;         /* 本帧找到可靠十字连接 */
+    uint8_t  cross_lo;            /* 补线区间起点（含） */
+    uint8_t  cross_hi;            /* 补线区间终点（不含，左闭右开） */
 } track_info_t;
 
-void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
+/* 菜单可调二值化阈值：0 = 大津法；>0 = 固定阈值 */
+extern volatile int16_t image_threshold;
 
+void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe);
+
+uint8_t detect_cross     (const track_info_t *ti);
+uint8_t detect_ring_left (const track_info_t *ti);
+uint8_t detect_ring_right(const track_info_t *ti);
+uint8_t detect_ramp      (const track_info_t *ti);
 
 #endif /* IMAGE_H */

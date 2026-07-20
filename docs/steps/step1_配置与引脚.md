@@ -33,15 +33,15 @@
 
 ---
 
-## 3. 边线与 hybrid 跟踪（§二）
+## 3. 边线与 18th 跟踪（§二）
 
 关键宏：
 
 | 宏 | 典型值 | 含义 |
 |----|--------|------|
 | `WIDTH_MIN_PX` / `WIDTH_MAX_PX` | 20 / 186 | 合法赛道宽度范围 |
-| `HYBRID_MAX_GAP_ROWS` | 4 | 最多跨几行全黑 |
-| `HYBRID_MAX_PREDICT_ROWS` | 8 | 双边丢失后最多预测几行 |
+| `TH18_COL_MARGIN` | 20 | 最长白列搜索左右留白 |
+| `TH18_CROSS_BOTH_LOST_MIN` | 10 | 十字补线触发：双边丢线行数下限 |
 | `STEER_W_BANDS` | 8 | 误差加权行带数 |
 
 两套转向权重表 `STEER_WEIGHTS_LOWSPEED` / `STEER_WEIGHTS_HIGHSPEED`：占空比越高，权重越向**远端行**移动（提前看弯）。

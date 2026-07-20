@@ -1,13 +1,7 @@
-/*********************************************************************************************************************
- * menu_config.c — 菜单项表的唯一定义处（单层扁平列表）。
- *   加一项：往 menu_items[] 加一行 MENU_* 宏（变量须是 control.c/image.c 里的 volatile 全局，并在下方 extern），
- *           然后 bump menu.h 的 MENU_FLASH_VERSION。
- *   这些 volatile 全局就是控制/图像每帧读取的那一份 —— 菜单里改完下一帧即生效。
- ********************************************************************************************************************/
+/* menu_config.c - menu item table */
 #include "menu.h"
 #include "config.h"    // 默认值取自 config.h 宏，保持单一真源
 
-// 控制/图像逻辑拥有的可调 volatile 全局
 extern volatile float   steer_kp_min;
 extern volatile float   steer_kp_max;
 extern volatile float   steer_kp_e_sat;

@@ -1,8 +1,4 @@
-/*********************************************************************************************************************
- * menu.h — 数据驱动调参菜单：硬件无关核心（公共 API + 配置类型）。
- * 100% 硬件无关，被 menu.c（引擎）与 menu_config.c（唯一定义项表处）包含。
- * 单层扁平列表：一屏一个可滚动列表，项 = 一个可调 volatile 全局 或 一个动作。
- ********************************************************************************************************************/
+/* menu.h - menu API + item types */
 #ifndef _menu_h_
 #define _menu_h_
 
@@ -35,18 +31,15 @@ typedef struct
 #define MENU_BOOL(nm, v, df)             { (nm), (void*)&(v), ITEM_BOOL  , 0, 1, 1, (df), 0 }
 #define MENU_ACTION(nm, fn)              { (nm), 0, ITEM_ACTION, 0, 0, 0, 0, (fn) }
 
-// 项表（在 menu_config.c 中定义，唯一定义处）
 extern const menu_item_t menu_items[];
 extern const uint16_t    menu_item_count;
 
-// Flash 记录标识：增删/重排任何可存项后 bump VERSION，使旧的不兼容镜像被拒、改用默认值。
 #define MENU_FLASH_MAGIC     (0x4D4E5531u)   /* 'MNU1' */
 #define MENU_FLASH_VERSION   (3u)
 
 void menu_init(void);   // CPU0 上调一次：显示 + 按键 + 载入 Flash 或默认
 void menu_task(void);   // 主循环每帧调用；非阻塞
 
-// 下面三个可直接用作 ACTION（或自行包装）
 void menu_action_save(void);
 void menu_action_load(void);
 void menu_action_defaults(void);

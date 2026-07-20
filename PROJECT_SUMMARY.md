@@ -19,7 +19,7 @@ test_CarRun/
 ├── isr_config.h          # TC264中断优先级配置
 ├── cpu0_main.h / .c      # CPU0 入口和主循环
 ├── cpu1_main.c           # CPU1 空桩（预留）
-├── image.h / .c          # 图像处理管线 + 坡道占位检测器
+├── image.h / .c          # 18th 最长白列 + 十字补线 + 坡道/环岛检测
 ├── fsm.h / .c            # 驾驶决策有限状态机（精简版）
 ├── control.h / .c        # 转向PD + 定速开环占空比
 ├── motor.h / .c          # 硬件抽象层：舵机、电机、蜂鸣器、按键
@@ -29,11 +29,10 @@ test_CarRun/
 ├── menu_config.c         # 菜单页面/项目定义
 ├── perf.h / .c           # 管线性能剖析钩子
 ├── isr.h / .c            # 中断服务例程
-└── firmware/user/        # AURIX 工程内镜像的同名应用源文件
+└── docs/                 # 学习文档
 ```
 
-**外部依赖**（不在仓库内完整拷贝时）：
-- `hybrid_8n_longest_col/hybrid_track.h` — 混合8邻域边缘追踪算法
+**外部依赖**（不在仓库内）：
 - `libraries/` — SeekFree TC264开源库（提供外设驱动）
 
 ---
@@ -66,7 +65,7 @@ Layer 6: 主循环 (cpu0_main.c)
 Layer 5: 显示/遥测 (display.c) + 菜单系统 (menu.c)
 Layer 4: 控制 (control.c) — 转向PD + 定速开环
 Layer 3: 状态机 (fsm.c) — 驾驶决策逻辑
-Layer 2: 图像处理 (image.c) — 边缘提取 + 坡道占位
+Layer 2: 图像处理 (image.c) — 18th 最长白列 + 十字补线
 Layer 1: 硬件抽象 (motor.c, isr.c) + 配置 (config.h, pins.h)
 ```
 

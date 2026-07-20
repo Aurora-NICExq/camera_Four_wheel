@@ -1,7 +1,4 @@
-/*********************************************************************************************************************
- * menu_port.c — 菜单硬件移植层：2" IPS200 竖屏 (240x320 SPI, 30×20 字符)。唯一包含逐飞头文件的菜单文件。
- * 复用 motor.c 已启的 key_scanner 与 system 定时器；换 MCU/库只需改本文件。
- ********************************************************************************************************************/
+/* menu_port.c - menu HAL (IPS200 + keys) */
 #include "zf_common_headfile.h"
 #include "menu_port.h"
 
@@ -26,7 +23,6 @@ void menu_port_key_scan(void)
     key_scanner();
 }
 
-//====================================================================================================================
 // Display -- 2-inch colour IPS200.  Character coordinates (col, row) are converted to pixel coordinates.
 //   col → x = col * 8      (8x16 font, 8 pixels per character wide)
 //   row → y = row * 16     (16 pixels per character tall)
@@ -39,7 +35,6 @@ void menu_port_key_scan(void)
 //
 //  The engine's build_label() and draw_title*() functions handle all visual distinction. The port
 //  layer simply draws the text as given at the requested position.
-//====================================================================================================================
 
 void menu_port_clear(void)
 {
@@ -75,12 +70,10 @@ void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint
     ips200_show_float((uint16)(col * 8), (uint16)(row * 16), (double)v, (uint8)int_w, (uint8)dec_w);
 }
 
-//====================================================================================================================
 // Input
 //   KEY_1=UP  KEY_2=DOWN  KEY_3=ENTER  KEY_4=BACK
 //   ENTER/BACK act on a short press only. UP/DOWN: short press = one 1x event; a held key produces throttled
 //   repeat events (is_repeat=1 -> engine applies 10x step). The library latches KEY_LONG_PRESS while held.
-//====================================================================================================================
 void menu_port_scan_keys(menu_key_event_t *ev)
 {
     static uint32 last_repeat_ms = 0;
@@ -111,9 +104,7 @@ void menu_port_scan_keys(menu_key_event_t *ev)
     }
 }
 
-//====================================================================================================================
 // Flash  (fixed DFLASH page ; data is an array of 32-bit words, stored via the union buffer)
-//====================================================================================================================
 uint8_t menu_port_flash_write(const uint32_t *buf, uint16_t count)
 {
     uint16_t i;

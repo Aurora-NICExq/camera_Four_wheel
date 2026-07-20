@@ -1,7 +1,7 @@
 # 第 2 步：图像流水线——从灰度图到转向误差
 
-> **目标**：理解 `image_process()` 三步走，以及 `hybrid_track_extract()` 如何填 `track_info_t`。
-> 对应文件：`image.c`、`image.h`、`hybrid_8n_longest_col/hybrid_track.c`
+> **目标**：理解 `image_process()` 四步走，以及 18th「最长白列 + 十字补线」如何填 `track_info_t`。
+> 对应文件：`image.c`、`image.h`（算法移植自 the-18th-smartcar `Camera.c`）
 
 ---
 
@@ -25,21 +25,26 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
 ---
 
-## 2. 三步流水线
+## 2. 四步流水线
 
 ```text
 (1) 阈值
       image_threshold>0 → 固定阈值
       否则 → otsu_threshold() 抽样直方图大津法
               ↓
-(2) hybrid_track_extract()
-      最长白列起种 + 八邻域双边跟踪 + 丢线预测
+(2) binarize()
+      灰度 → 0/255 二值图 image_bin[][]
               ↓
-(3) weighted_error()
-      8 行带权重，按 duty_now 混合低/高速表
+(3) longest_white_column()
+      统计每列白像素高度 → 找左右最长白列 → 白-黑-黑边线扫描
+              ↓
+(4) cross_detect()
+      双边丢线足够多 → 找上下拐点 → left/right_add_line 或 lengthen 补线
+              ↓
+      export_track() + weighted_error()
 ```
 
-对应 `image.c` 191–201 行。
+对应 `image.c` 中 `image_process()`。
 
 ---
 
@@ -53,25 +58,35 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
 ---
 
-## 4. Hybrid 边线跟踪（概要）
+## 4. 最长白列边线（`longest_white_column`）
 
-文件：`hybrid_8n_longest_col/hybrid_track.c`
+从图像**最底行**向上，在 `[TH18_COL_MARGIN, IMG_W - TH18_COL_MARGIN]` 内：
 
-从**图像最底行**向上逐行：
+1. 统计每列连续白像素高度 → `white_column[]`
+2. **左扫**找最长白列 → `longest_white_left_col`
+3. **右扫**独立找最长白列 → `longest_white_right_col`
+4. 在最长白列高度范围内，每行用 **白-黑-黑** 模板找左右边
 
-1. **最长白列**作锚点，找白种子
-2. 严格八邻域跟踪左右边
-3. 边丢失 → 小窗口重捕获 → 仍失败则宽度表预测
-4. 输出每行 `left/right/mid/width` 与 `left_lost/right_lost`
+边丢失时该行 `left_lost` / `right_lost` 置 1；`both_lost_time` 统计全图双边丢线行数。
 
-关键配置见 `config.h` 的 `HYBRID_*` 宏。  
-`valid_rows` = 成功跟踪到的行数（从底向上）。
-
-坐标：`out` 里 row=0 仍是**离车最近**的行；读相机数组时用 `RAW_ROW(row) = IMG_H - 1 - row`。
+坐标：`export_track()` 用 `TR_ROW(ir) = IMG_H - 1 - ir` 翻转，使 `track_info_t` 里 row=0 为**离车最近**的行。
 
 ---
 
-## 5. 加权误差（`weighted_error`）
+## 5. 十字补线（`cross_detect`）
+
+当 `both_lost_time >= TH18_CROSS_BOTH_LOST_MIN`：
+
+1. `find_up_point`：从底向上找左右上拐点
+2. `find_down_point`：从上拐点附近向下找下拐点
+3. 根据四象限组合，调用 `left_add_line` / `right_add_line` 或 `lengthen_*_boundry` 补线
+4. `mark_cross_fill` 标记补线区间 → `cross_filled[]`，供加权误差降权使用
+
+`detect_cross()` 直接读 `ti->cross_valid`（由 `cross_detect` 写入）。
+
+---
+
+## 6. 加权误差（`weighted_error`）
 
 ```text
 error = Σ w(row) · (mid[row] - IMG_CENTER) / Σ w(row)
@@ -84,13 +99,14 @@ error = Σ w(row) · (mid[row] - IMG_CENTER) / Σ w(row)
 - **置信缩放**：
   - 双边实测 → 100%
   - 单边重建 → `STEER_W_SINGLE_EDGE_PCT`（50%）
-  - 双边丢失预测 → `STEER_W_BOTH_LOST_PCT`（0%，不参与）
+  - 十字补线 → `STEER_W_CROSS_FILL_PCT`（70%）
+  - 双边丢失 → `STEER_W_BOTH_LOST_PCT`（0%，不参与）
 
 `w_sum==0` 时 error=0，由 `image_track_invalid()` 触发失控保护。
 
 ---
 
-## 6. 图像健康（`image_track_invalid`）
+## 7. 图像健康（`image_track_invalid`）
 
 | 条件 | 结果 |
 |------|------|
@@ -102,20 +118,20 @@ error = Σ w(row) · (mid[row] - IMG_CENTER) / Σ w(row)
 
 ---
 
-## 7. 阅读顺序建议
+## 8. 阅读顺序建议
 
 1. `image.h` → 看 `track_info_t` 每个字段
 2. `image.c` → `image_process()` 总入口
-3. `hybrid_track.h` → 诊断结构体（可选）
-4. `hybrid_track.c` → 从 `hybrid_track_extract()` 主循环读起（较长，可分多次）
+3. `longest_white_column()` → 基础边线
+4. `cross_detect()` → 十字拐点与补线
 
 ---
 
-## 8. 自查
+## 9. 自查
 
 - [ ] 能说出 `error` 是怎么从多行 `mid[]` 合成一个数的
 - [ ] 知道 `duty_now` 为什么会影响权重（前瞻随速度）
 - [ ] 知道 `both_lost` 行为什么不参与误差累加
-- [ ] 知道 `RAW_ROW` 为什么存在（相机顶行 vs 逻辑底行）
+- [ ] 知道 `TR_ROW` 为什么存在（相机顶行 vs 逻辑底行）
 
 下一步：[控制律](./step3_控制律.md)

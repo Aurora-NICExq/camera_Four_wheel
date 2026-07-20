@@ -47,7 +47,7 @@ Layer 1  motor.c / isr.c  硬件
 Layer 0  config.h pins.h  常量
 ```
 
-**纯逻辑层**（可在 PC 用 gcc 编译）：`image.c`、`control.c`、`hybrid_track.c`。  
+**纯逻辑层**（可在 PC 用 gcc 编译）：`image.c`、`control.c`。  
 它们只 include `<stdint.h>`、`config.h`、彼此头文件。
 
 ---
@@ -79,10 +79,9 @@ Layer 0  config.h pins.h  常量
 
 ---
 
-## 6. 目录与 `output_user_code`
+## 6. 目录
 
-根目录与 `output_user_code/` **文件内容一致**。  
-学习、改代码在根目录进行；拷到 ADS 时用 `output_user_code/` 整包复制到 `user/` 即可。
+根目录即全部业务源码（`.c/.h`）与 `docs/` 文档，拷到 ADS 工程的 `user/` 即可。
 
 ---
 

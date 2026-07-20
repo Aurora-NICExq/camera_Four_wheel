@@ -1,21 +1,9 @@
-/*********************************************************************************************************************
- * 模块：control.c — 转向 PD + 定速开环占空比（纯逻辑层，可在 PC 上用 gcc 编译）
- *
- * 精简版（直道+转弯）：无状态机/契约层。转向对 track_info.error 做调度 Kp 的 PD；
- * 速度策略简化为：target = min(STRAIGHT_DUTY, DUTY_HARD_CAP) + 升/降斜坡。
- ********************************************************************************************************************/
+/* control.c - steer PD + open-loop duty from FSM contract */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
+#include "fsm.h"
 #include "control.h"
-
-/*===================================================================================================================
- * 一、菜单可调定标（菜单直接编辑这些 volatile 全局）
- *-------------------------------------------------------------------------------------------------------------------
- * 上电初值取 config.h 的默认宏；menu_init() 之后若 Flash 有存档会覆盖它们。
- * 菜单只在“编辑结束”那一刻单次写入（16/32 位对齐写），本控制律每帧读取 —— 永不会看到半改值。
- * PC replay 不编译菜单（menu_config.c 不参与），这些量始终保持默认 → 离线回放逐位不变。
- *==================================================================================================================*/
 
 volatile float   steer_kp_min       = KP_MIN;
 volatile float   steer_kp_max       = KP_MAX;
@@ -25,35 +13,52 @@ volatile float   steer_kp_const     = KP_CONST;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
 
-/*===================================================================================================================
- * 二、内部状态（跨帧记忆）
- *==================================================================================================================*/
-
 static int16_t  g_prev_error;
 static float    g_d_filt;
 static uint16_t g_duty_now;
 static uint16_t g_servo_now;
 
-/*===================================================================================================================
- * 二、内部工具
- *==================================================================================================================*/
-
 uint16_t control_servo_clamp(int32_t servo_raw)
 {
-    if (servo_raw < SERVO_MIN)
-    {
-        servo_raw = SERVO_MIN;
-    }
-    if (servo_raw > SERVO_MAX)
-    {
-        servo_raw = SERVO_MAX;
-    }
+    if (servo_raw < SERVO_MIN) servo_raw = SERVO_MIN;
+    if (servo_raw > SERVO_MAX) servo_raw = SERVO_MAX;
     return (uint16_t)servo_raw;
 }
 
-/*===================================================================================================================
- * 三、对外接口
- *==================================================================================================================*/
+static int16_t steer_error_from_contract(const track_info_t *ti, const state_contract_t *ct)
+{
+    switch (ct->steer_src)
+    {
+    case STEER_SRC_LEFT_EDGE:
+    case STEER_SRC_RIGHT_EDGE:
+    {
+        int32_t acc = 0;
+        uint8_t cnt = 0;
+        uint8_t r;
+        uint8_t hi = (ti->valid_rows < CURV_NEAR_ROW_HI) ? ti->valid_rows : CURV_NEAR_ROW_HI;
+        for (r = CURV_NEAR_ROW_LO; r < hi; r++)
+        {
+            int16_t mid;
+            if (ct->steer_src == STEER_SRC_LEFT_EDGE)
+            {
+                mid = (int16_t)ti->left[r] + (int16_t)fsm_ring_half_width(r);
+            }
+            else
+            {
+                mid = (int16_t)ti->right[r] - (int16_t)fsm_ring_half_width(r);
+            }
+            acc += (mid - IMG_CENTER);
+            cnt++;
+        }
+        return (cnt > 0) ? (int16_t)(acc / cnt) : 0;
+    }
+    case STEER_SRC_FIXED_BIAS:
+        return ct->steer_bias;
+    case STEER_SRC_MIDLINE:
+    default:
+        return ti->error;
+    }
+}
 
 void control_init(void)
 {
@@ -65,9 +70,14 @@ void control_init(void)
 
 void control_update(const track_info_t *ti, uint8_t armed, control_out_t *out)
 {
-    /*==================================== 转向 PD ====================================
-     * 误差直接取加权中线误差；D 项跨帧记忆在 control_init()（解锁）时归零。 */
-    int16_t error = ti->error;
+    const state_contract_t *ct = fsm_contract();
+    int16_t error = steer_error_from_contract(ti, ct);
+
+    if (fsm_state_just_entered())
+    {
+        g_prev_error = error;
+        g_d_filt     = 0.0f;
+    }
 
     float d_raw = (float)(error - g_prev_error);
     g_prev_error = error;
@@ -82,10 +92,7 @@ void control_update(const track_info_t *ti, uint8_t armed, control_out_t *out)
     {
         float e_abs = (error >= 0) ? (float)error : (float)(-error);
         float ratio = e_abs / steer_kp_e_sat;
-        if (ratio > 1.0f)
-        {
-            ratio = 1.0f;
-        }
+        if (ratio > 1.0f) ratio = 1.0f;
         kp = steer_kp_min + (steer_kp_max - steer_kp_min) * ratio * ratio;
     }
 
@@ -105,13 +112,9 @@ void control_update(const track_info_t *ti, uint8_t armed, control_out_t *out)
     }
     out->servo_pwm = control_servo_clamp(g_servo_now);
 
-    /*==================================== 速度（定速开环） ====================================*/
     uint16_t target = STRAIGHT_DUTY;
-    if (target > DUTY_HARD_CAP)
-    {
-        target = DUTY_HARD_CAP;
-    }
-
+    if (target > ct->duty_cap) target = ct->duty_cap;
+    if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
     out->duty_target = target;
 
     if (target > g_duty_now)
@@ -125,10 +128,7 @@ void control_update(const track_info_t *ti, uint8_t armed, control_out_t *out)
         g_duty_now -= (step > DUTY_SLEW_DOWN) ? DUTY_SLEW_DOWN : step;
     }
 
-    if (!armed)
-    {
-        g_duty_now = 0;
-    }
+    if (!armed) g_duty_now = 0;
 
     out->duty       = g_duty_now;
     out->error_used = error;

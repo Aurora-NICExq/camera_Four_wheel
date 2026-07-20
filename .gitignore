@@ -1,0 +1,6 @@
+/target/
+*.o
+*.so
+*.dylib
+*.d
+.DS_Store
