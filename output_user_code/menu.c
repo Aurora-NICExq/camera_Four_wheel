@@ -1,0 +1,328 @@
+/*********************************************************************************************************************
+ * menu.c — 数据驱动调参菜单引擎（硬件无关，所有硬件动作走 menu_port_*）。
+ * 单层扁平列表：光标 + 滚动窗口，只重绘脏行（从不整屏清帧）。
+ * 数值编辑用工作副本：仅在编辑结束（ENTER）时单次写回 volatile 全局，控制回路永不见半改值。
+ * Flash 存取表驱动（magic + version + count + checksum）。
+ ********************************************************************************************************************/
+#include "menu.h"
+#include "menu_port.h"
+
+#define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
+#define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
+#define VALUE_WIDTH   (MENU_COLS - VALUE_COL)
+#define FLASH_MAX_WORDS (64)
+#define KEY_STEP_MULT (10.0f)                   // 长按自动重复步长倍率
+
+typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
+
+static nav_state_e       s_nav;
+static uint8_t           s_cursor;              // 选中项索引
+static uint8_t           s_top;                 // 滚动窗口顶
+static float             s_edit_val;            // 编辑工作副本
+static const menu_item_t *s_edit_item;
+static uint32_t          s_flash_buf[FLASH_MAX_WORDS];
+
+//==================================================================================================================
+// 取值 / 写值
+//==================================================================================================================
+static int32_t round_f(float v) { return (int32_t)(v >= 0.0f ? v + 0.5f : v - 0.5f); }
+
+static float item_get(const menu_item_t *it)
+{
+    switch (it->type)
+    {
+    case ITEM_INT16:  return (float)(*(volatile int16_t  *)it->var);
+    case ITEM_UINT16: return (float)(*(volatile uint16_t *)it->var);
+    case ITEM_FLOAT:  return *(volatile float *)it->var;
+    case ITEM_BOOL:   return (*(volatile uint8_t *)it->var) ? 1.0f : 0.0f;
+    default:          return 0.0f;
+    }
+}
+
+// 单次对齐写：控制上下文只会看到旧值或此新值，绝无中间态。
+static void item_set(const menu_item_t *it, float v)
+{
+    if (v < it->min) v = it->min;
+    if (v > it->max) v = it->max;
+    switch (it->type)
+    {
+    case ITEM_INT16:  *(volatile int16_t  *)it->var = (int16_t)round_f(v);   break;
+    case ITEM_UINT16: *(volatile uint16_t *)it->var = (uint16_t)round_f(v);  break;
+    case ITEM_FLOAT:  *(volatile float    *)it->var = v;                     break;
+    case ITEM_BOOL:   *(volatile uint8_t  *)it->var = (v != 0.0f) ? 1u : 0u; break;
+    default: break;
+    }
+}
+
+//==================================================================================================================
+// 绘制
+//==================================================================================================================
+// 整宽空格填充的标签，使前缀光标条铺满整行。
+static void build_label(char *dst, const char *name)
+{
+    uint8_t i;
+    for (i = 0; i < MENU_COLS; i++) dst[i] = ' ';
+    dst[MENU_COLS] = '\0';
+    if (name) for (i = 0; i < MENU_COLS && name[i]; i++) dst[i] = name[i];
+}
+
+static void draw_title(const char *txt)
+{
+    char t[MENU_COLS + 1];
+    uint8_t i, j;
+    for (i = 0; i < MENU_COLS; i++) t[i] = ' ';
+    t[MENU_COLS] = '\0';
+    t[0] = '='; t[1] = ' '; j = 2;
+    for (i = 0; txt && txt[i] && j < MENU_COLS - 2; i++) t[j++] = txt[i];
+    if (j < MENU_COLS - 1) { t[j++] = ' '; t[j++] = '='; }
+    menu_port_draw_text(0, 0, t, MENU_STYLE_TITLE);
+}
+
+static void draw_title_edit(const char *name)
+{
+    char t[MENU_COLS + 1];
+    const char *pfx = "[E] ";
+    uint8_t i, j = 0;
+    for (i = 0; i < MENU_COLS; i++) t[i] = ' ';
+    t[MENU_COLS] = '\0';
+    for (i = 0; pfx[i] && j < MENU_COLS; i++) t[j++] = pfx[i];
+    for (i = 0; name && name[i] && j < MENU_COLS; i++) t[j++] = name[i];
+    menu_port_draw_text(0, 0, t, MENU_STYLE_EDIT);
+}
+
+static void draw_value(const menu_item_t *it, uint8_t row, float v, menu_style_e st)
+{
+    switch (it->type)
+    {
+    case ITEM_FLOAT:  menu_port_draw_float(VALUE_COL, row, v, 4, 2, st);                       break;
+    case ITEM_INT16:  menu_port_draw_int (VALUE_COL, row, (int32_t)round_f(v), VALUE_WIDTH, st); break;
+    case ITEM_UINT16: menu_port_draw_uint(VALUE_COL, row, (uint32_t)round_f(v), VALUE_WIDTH, st);break;
+    case ITEM_BOOL:   menu_port_draw_text(VALUE_COL, row, (v != 0.0f) ? "ON " : "OFF", st);    break;
+    default: break;
+    }
+}
+
+static void draw_item_row(uint8_t index, uint8_t screen_row, bool selected, bool editing)
+{
+    const menu_item_t *it = &menu_items[index];
+    char label[MENU_COLS + 1];
+    menu_style_e st = editing ? MENU_STYLE_EDIT : (selected ? MENU_STYLE_SELECTED : MENU_STYLE_NORMAL);
+    build_label(label, it->name);
+    if (selected || editing) { label[0] = '>'; label[1] = ' '; }
+    menu_port_draw_text(0, screen_row, label, st);
+    if (it->type != ITEM_ACTION) draw_value(it, screen_row, editing ? s_edit_val : item_get(it), st);
+}
+
+static void draw_list_full(void)
+{
+    char blank[MENU_COLS + 1];
+    uint8_t r;
+    menu_port_clear();
+    draw_title("TUNING");
+    build_label(blank, "");
+    for (r = 0; r < CONTENT_ROWS; r++)
+    {
+        uint8_t i = (uint8_t)(s_top + r);
+        if (i < menu_item_count)
+            draw_item_row(i, (uint8_t)(r + 1), (i == s_cursor), (s_nav == NAV_EDIT && i == s_cursor));
+        else
+            menu_port_draw_text(0, (uint8_t)(r + 1), blank, MENU_STYLE_NORMAL);
+    }
+}
+
+// Load / Restore 改了 live 值后，只刷可见行的值字段。
+static void redraw_visible_values(void)
+{
+    uint8_t r;
+    for (r = 0; r < CONTENT_ROWS; r++)
+    {
+        uint8_t i = (uint8_t)(s_top + r);
+        if (i >= menu_item_count) break;
+        if (menu_items[i].type != ITEM_ACTION)
+            draw_value(&menu_items[i], (uint8_t)(r + 1), item_get(&menu_items[i]),
+                       (i == s_cursor) ? MENU_STYLE_SELECTED : MENU_STYLE_NORMAL);
+    }
+}
+
+//==================================================================================================================
+// 导航 / 编辑
+//==================================================================================================================
+static void list_move(int8_t dir)
+{
+    uint8_t old = s_cursor, old_top = s_top;
+    if (dir < 0) { if (s_cursor == 0) return; s_cursor--; }
+    else         { if (s_cursor + 1 >= menu_item_count) return; s_cursor++; }
+
+    if (s_cursor < s_top)                         s_top = s_cursor;
+    else if (s_cursor >= s_top + CONTENT_ROWS)    s_top = (uint8_t)(s_cursor - CONTENT_ROWS + 1);
+
+    if (s_top != old_top) { draw_list_full(); return; }
+    draw_item_row(old,      (uint8_t)((old - s_top) + 1),      false, false);
+    draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true,  false);
+}
+
+static void item_enter(void)
+{
+    const menu_item_t *it = &menu_items[s_cursor];
+    if (it->type == ITEM_ACTION) { if (it->action) it->action(); return; }
+    if (it->type == ITEM_BOOL)
+    {
+        item_set(it, (item_get(it) != 0.0f) ? 0.0f : 1.0f);   // 原子 toggle + commit
+        draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, false);
+        return;
+    }
+    s_nav = NAV_EDIT;                                          // 数值 → 进入编辑（工作副本）
+    s_edit_item = it;
+    s_edit_val  = item_get(it);
+    draw_title_edit(it->name);
+    draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, true);
+}
+
+static void edit_adjust(int8_t dir, uint8_t repeat)
+{
+    const menu_item_t *it = s_edit_item;
+    float step = it->step * (repeat ? KEY_STEP_MULT : 1.0f);
+    s_edit_val += (dir > 0) ? step : -step;
+    if (s_edit_val < it->min) s_edit_val = it->min;
+    if (s_edit_val > it->max) s_edit_val = it->max;
+    draw_value(it, (uint8_t)((s_cursor - s_top) + 1), s_edit_val, MENU_STYLE_EDIT);
+}
+
+static void edit_end(bool commit)
+{
+    if (commit && s_edit_item) item_set(s_edit_item, s_edit_val);   // 单次写回
+    s_nav = NAV_LIST;
+    draw_title("TUNING");
+    draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, false);
+}
+
+//==================================================================================================================
+// Flash 存取（表驱动 magic + version + count + checksum）
+//==================================================================================================================
+static uint16_t savable_count(void)
+{
+    uint16_t i, c = 0;
+    for (i = 0; i < menu_item_count; i++) if (menu_items[i].type != ITEM_ACTION) c++;
+    return c;
+}
+
+static uint32_t float_bits(float f) { union { float f; uint32_t u; } x; x.f = f; return x.u; }
+static float    bits_float(uint32_t u) { union { float f; uint32_t u; } x; x.u = u; return x.f; }
+
+static uint32_t item_to_word(const menu_item_t *it)
+{
+    switch (it->type)
+    {
+    case ITEM_FLOAT:  return float_bits(*(volatile float *)it->var);
+    case ITEM_INT16:  return (uint32_t)(int32_t)(*(volatile int16_t *)it->var);
+    case ITEM_UINT16: return (uint32_t)(*(volatile uint16_t *)it->var);
+    case ITEM_BOOL:   return (*(volatile uint8_t *)it->var) ? 1u : 0u;
+    default:          return 0u;
+    }
+}
+
+static void word_to_item(const menu_item_t *it, uint32_t w)
+{
+    switch (it->type)
+    {
+    case ITEM_FLOAT:  *(volatile float    *)it->var = bits_float(w);        break;
+    case ITEM_INT16:  *(volatile int16_t  *)it->var = (int16_t)(int32_t)w;  break;
+    case ITEM_UINT16: *(volatile uint16_t *)it->var = (uint16_t)w;          break;
+    case ITEM_BOOL:   *(volatile uint8_t  *)it->var = w ? 1u : 0u;          break;
+    default: break;
+    }
+}
+
+static void apply_defaults(void)
+{
+    uint16_t i;
+    for (i = 0; i < menu_item_count; i++)
+        if (menu_items[i].type != ITEM_ACTION) item_set(&menu_items[i], menu_items[i].def);
+}
+
+static bool load_from_flash(void)
+{
+    uint16_t n = savable_count();
+    uint16_t total = (uint16_t)(n + 4);           // magic + version + count + params + checksum
+    uint16_t i, k;
+    uint32_t sum = 0;
+    if (total > FLASH_MAX_WORDS) return false;
+
+    menu_port_flash_read(s_flash_buf, total);
+    if (s_flash_buf[0] != MENU_FLASH_MAGIC)   return false;
+    if (s_flash_buf[1] != MENU_FLASH_VERSION) return false;
+    if (s_flash_buf[2] != n)                  return false;
+    for (i = 0; i < (uint16_t)(total - 1); i++) sum += s_flash_buf[i];
+    if (sum != s_flash_buf[total - 1])        return false;
+
+    k = 3;
+    for (i = 0; i < menu_item_count; i++)
+        if (menu_items[i].type != ITEM_ACTION) word_to_item(&menu_items[i], s_flash_buf[k++]);
+    return true;
+}
+
+void menu_action_save(void)
+{
+    uint16_t n = savable_count();
+    uint16_t i, k;
+    uint32_t sum = 0;
+    if ((uint16_t)(n + 4) > FLASH_MAX_WORDS) { draw_title("Too Many"); return; }
+
+    s_flash_buf[0] = MENU_FLASH_MAGIC;
+    s_flash_buf[1] = MENU_FLASH_VERSION;
+    s_flash_buf[2] = n;
+    k = 3;
+    for (i = 0; i < menu_item_count; i++)
+        if (menu_items[i].type != ITEM_ACTION) s_flash_buf[k++] = item_to_word(&menu_items[i]);
+    for (i = 0; i < k; i++) sum += s_flash_buf[i];
+    s_flash_buf[k++] = sum;
+
+    draw_title(menu_port_flash_write(s_flash_buf, k) ? "Saved" : "Save ERR");
+}
+
+void menu_action_load(void)
+{
+    draw_title(load_from_flash() ? "Loaded" : "No Data");
+    redraw_visible_values();
+}
+
+void menu_action_defaults(void)
+{
+    apply_defaults();
+    draw_title("Defaults");
+    redraw_visible_values();
+}
+
+//==================================================================================================================
+// 对外入口
+//==================================================================================================================
+void menu_init(void)
+{
+    menu_port_init();
+    if (!load_from_flash()) apply_defaults();   // 有效记录则用之，否则用表内默认
+    s_nav = NAV_LIST;
+    s_cursor = 0;
+    s_top = 0;
+    draw_list_full();
+}
+
+void menu_task(void)
+{
+    menu_key_event_t ev;
+    menu_port_key_scan();
+    menu_port_scan_keys(&ev);
+
+    if (s_nav == NAV_LIST)
+    {
+        if      (ev.key == MENU_KEY_UP)    list_move(-1);
+        else if (ev.key == MENU_KEY_DOWN)  list_move(+1);
+        else if (ev.key == MENU_KEY_ENTER) item_enter();
+    }
+    else /* NAV_EDIT */
+    {
+        if      (ev.key == MENU_KEY_UP)    edit_adjust(+1, ev.is_repeat);
+        else if (ev.key == MENU_KEY_DOWN)  edit_adjust(-1, ev.is_repeat);
+        else if (ev.key == MENU_KEY_ENTER) edit_end(true);
+        else if (ev.key == MENU_KEY_BACK)  edit_end(false);
+    }
+}
