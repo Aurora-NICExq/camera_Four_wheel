@@ -195,12 +195,10 @@ static void search_edges(const uint8_t img[IMG_H][IMG_W], uint8_t th, track_info
 /*-------------------------------------------------------------------------------------------------------------------
  * rebuild_lost_edges — 帧内学习赛道宽度表，重建丢失边线，生成中线
  * 步骤：
- *   1. 双边完好的行：width = right-left（若在合法区间），存入宽度表并线性外推填补空档；
+ *   1. 双边完好的行：width = right-left（若在合法区间），存入宽度表并就近填补空档；
  *   2. 单边丢失：丢失边 = 另一边 ± 该行宽度表值；
- *   3. 双边丢失：中线沿用下方最近完好行的中线（向上外推 —— 十字里就是"照直冲"）；
+ *   3. 双边丢失：中线沿用下方最近完好行的中线（向上外推）；
  *   4. mid = (left+right)/2，逐行钳制在图像范围内。
- * 为什么宽度表按行学习：透视投影下赛道宽度随行号非线性变化，一条全局宽度会在远端重建出
- * 系统性偏差；用"本帧双边行实测 + 邻行插值"最贴近当下透视关系。
  *------------------------------------------------------------------------------------------------------------------*/
 static void rebuild_lost_edges(track_info_t *ti)
 {
@@ -219,11 +217,11 @@ static void rebuild_lost_edges(track_info_t *ti)
                 last_width = (uint8_t)w;
             }
         }
-        ti->width[r] = last_width;      /* 丢线行沿用下方最近的实测宽度（透视下相邻行宽度近似） */
+        ti->width[r] = last_width;
     }
 
     /* --- 第 2/3 步：重建丢失边 --- */
-    uint8_t last_mid = IMG_CENTER;      /* 双边全丢时的外推基准：下方最近可信中线 */
+    uint8_t last_mid = IMG_CENTER;
     for (r = 0; r < ti->valid_rows; r++)
     {
         uint8_t lost_l = ti->left_lost[r];
@@ -231,8 +229,7 @@ static void rebuild_lost_edges(track_info_t *ti)
 
         if (lost_l && lost_r)
         {
-            /* 双边丢失：无任何本行信息，中线外推 = 下方最近可信行的中线。
-             * 十字中央就是这种情况 —— 外推即"保持直行冲过去"，与十字策略一致。 */
+            /* 双边丢失：中线外推 = 下方最近可信行的中线。 */
             ti->both_lost_rows++;
             int16_t half = (int16_t)(ti->width[r] / 2u);
             int16_t l = (int16_t)last_mid - half;
@@ -242,13 +239,11 @@ static void rebuild_lost_edges(track_info_t *ti)
         }
         else if (lost_l)
         {
-            /* 只丢左边：左 = 右 − 宽 */
             int16_t l = (int16_t)ti->right[r] - (int16_t)ti->width[r];
             ti->left[r] = (uint8_t)((l < 0) ? 0 : l);
         }
         else if (lost_r)
         {
-            /* 只丢右边：右 = 左 + 宽 */
             int16_t rr = (int16_t)ti->left[r] + (int16_t)ti->width[r];
             ti->right[r] = (uint8_t)((rr > IMG_W - 1) ? (IMG_W - 1) : rr);
         }
@@ -257,7 +252,7 @@ static void rebuild_lost_edges(track_info_t *ti)
 
         if (!lost_l || !lost_r)
         {
-            last_mid = ti->mid[r];      /* 至少一边实测的行才更新外推基准 */
+            last_mid = ti->mid[r];
         }
     }
 }
@@ -355,176 +350,8 @@ static int16_t segment_slope_q8(const track_info_t *ti, uint8_t lo, uint8_t hi, 
 
 /*===================================================================================================================
  * 五、元素检测器 —— 纯函数，单帧判定，不去抖（去抖是 fsm.c 的结构性职责）
+ * 精简版已移除十字 / 环岛检测器，仅保留坡道占位。
  *==================================================================================================================*/
-
-/*-------------------------------------------------------------------------------------------------------------------
- * detect_cross — 十字特征：行带内一段双边丢失，且丢失带下方与上方都有双边完好行
- * "上下都有完好行"是十字与冲出赛道的本质区别：十字对面的赛道仍然可见。
- *------------------------------------------------------------------------------------------------------------------*/
-uint8_t detect_cross(const track_info_t *ti)
-{
-#if ENABLE_CROSS
-    uint8_t start;
-    uint8_t hi = (ti->valid_rows < CROSS_BAND_ROW_HI) ? ti->valid_rows : CROSS_BAND_ROW_HI;
-    for (start = CROSS_BAND_ROW_LO; start < hi; start++)
-    {
-        uint8_t end;
-        uint8_t good_below = 0;
-        uint8_t good_above = 0;
-        int16_t r;
-
-        if (!(ti->left_lost[start] && ti->right_lost[start]))
-        {
-            continue;
-        }
-
-        end = start;
-        while (end < hi && ti->left_lost[end] && ti->right_lost[end])
-        {
-            end++;
-        }
-
-        for (r = (int16_t)start - 1; r >= CROSS_BAND_ROW_LO; r--)
-        {
-            if (ti->left_lost[r] || ti->right_lost[r])
-            {
-                break;
-            }
-            good_below++;
-        }
-        for (r = end; r < hi; r++)
-        {
-            if (ti->left_lost[r] || ti->right_lost[r])
-            {
-                break;
-            }
-            good_above++;
-        }
-
-        if ((uint8_t)(end - start) >= CROSS_MIN_BOTH_LOST &&
-            good_below >= CROSS_MIN_GOOD_BELOW &&
-            good_above >= CROSS_MIN_GOOD_ABOVE)
-        {
-            return 1;
-        }
-
-        /* 本段已完整检查；外层直接跳到下一段，避免把同一缺口重复扫描。 */
-        if (end > start)
-        {
-            start = (uint8_t)(end - 1u);
-        }
-    }
-    return 0;
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-/*-------------------------------------------------------------------------------------------------------------------
- * ring_side_signature — 环岛单侧特征（左右共用的内部实现）
- * 特征：弧侧（环口所在侧）行带内出现"完好→丢失(缺口)→再完好"的三段结构，
- *       且对侧（连续侧）几乎不丢线。"缺口上方边线重现"区分环岛与普通大弯的单边丢失。
- * 输出：命中返回 1，*gap_lo 回填缺口下沿行号（入环时机判断用）。
- *------------------------------------------------------------------------------------------------------------------*/
-static uint8_t ring_side_signature(const track_info_t *ti,
-                                   const uint8_t *arc_lost, const uint8_t *solid_lost,
-                                   uint8_t *gap_lo)
-{
-    uint8_t r;
-    uint8_t hi = (ti->valid_rows < RING_BAND_ROW_HI) ? ti->valid_rows : RING_BAND_ROW_HI;
-
-    /* 连续侧必须真的连续 */
-    uint8_t solid_lost_cnt = 0;
-    for (r = RING_BAND_ROW_LO; r < hi; r++)
-    {
-        if (solid_lost[r])
-        {
-            solid_lost_cnt++;
-        }
-    }
-    if (solid_lost_cnt > RING_SOLID_MAX_LOST)
-    {
-        return 0;
-    }
-
-    /* 弧侧：严格寻找一段连续的 完好→缺口→完好 结构。
-     * 旧实现会把多个零散缺口累计，容易让噪声凑够阈值。 */
-    for (r = RING_BAND_ROW_LO; r < hi; r++)
-    {
-        uint8_t end;
-        uint8_t good_below = 0;
-        uint8_t good_above = 0;
-        int16_t rr;
-
-        if (!arc_lost[r])
-        {
-            continue;
-        }
-
-        end = r;
-        while (end < hi && arc_lost[end])
-        {
-            end++;
-        }
-        for (rr = (int16_t)r - 1; rr >= RING_BAND_ROW_LO; rr--)
-        {
-            if (arc_lost[rr])
-            {
-                break;
-            }
-            good_below++;
-        }
-        for (rr = end; rr < hi; rr++)
-        {
-            if (arc_lost[rr])
-            {
-                break;
-            }
-            good_above++;
-        }
-
-        if ((uint8_t)(end - r) >= RING_ARC_MIN_LOST &&
-            good_below >= RING_ARC_MIN_GOOD_BELOW &&
-            good_above >= RING_ARC_MIN_GOOD_ABOVE)
-        {
-            *gap_lo = r;
-            return 1;
-        }
-
-        if (end > r)
-        {
-            r = (uint8_t)(end - 1u);
-        }
-    }
-    return 0;
-}
-
-/*-------------------------------------------------------------------------------------------------------------------
- * detect_ring_left / detect_ring_right — 左/右环岛（互为镜像）
- * 左环岛：环在赛道左侧 → 左边线出现环口缺口（弧侧=左），右边线连续（连续侧=右）。
- *------------------------------------------------------------------------------------------------------------------*/
-uint8_t detect_ring_left(const track_info_t *ti)
-{
-#if ENABLE_RING
-    uint8_t gap_lo;
-    return ring_side_signature(ti, ti->left_lost, ti->right_lost, &gap_lo);
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-uint8_t detect_ring_right(const track_info_t *ti)
-{
-#if ENABLE_RING
-    uint8_t gap_lo;
-    return ring_side_signature(ti, ti->right_lost, ti->left_lost, &gap_lo);
-#else
-    (void)ti;
-    return 0;
-#endif
-}
 
 /*-------------------------------------------------------------------------------------------------------------------
  * detect_ramp — 坡道（占位实现）：远行带实测宽度显著大于近处学习值（上坡视角变宽）
@@ -639,13 +466,9 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
     /* 6. 元素检测器（单帧原始输出，去抖交给 fsm.c）。 */
     PERF_BEGIN(PF_DET_GEOM);
-    out->det_cross      = detect_cross(out);
-    out->det_ring_left  = detect_ring_left(out);
-    out->det_ring_right = detect_ring_right(out);
-    out->det_ramp       = detect_ramp(out);
+    out->det_ramp = detect_ramp(out);
     PERF_END(PF_DET_GEOM);
 
-    /* 7. 检测特征强度（FSM 转移轨迹记录用）：取"最有戏剧性"的一个 */
-    out->det_value   = (int16_t)out->both_lost_rows;
-    out->inflect_row = 0xFF;    /* 拐点行号：当前实现未单独导出，保留字段供调试扩展 */
+    /* 7. 检测特征强度（FSM 转移轨迹记录用） */
+    out->det_value = (int16_t)out->both_lost_rows;
 }

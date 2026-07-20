@@ -33,7 +33,7 @@ static uint8_t  g_chirp_frames;     /* 蜂鸣器剩余鸣叫帧数              
 /* 状态名表（与 fsm_state_t 顺序一致；屏幕与遥测共用） */
 static const char *const g_state_name[ST_COUNT] =
 {
-    "NORMAL", "CROSS ", "RINGPR", "RINGIN", "RINGEX", "RAMP  ", "RECOV ", "FAULT ",
+    "NORMAL", "RAMP  ", "RECOV ", "FAULT ",
 };
 
 /*===================================================================================================================
@@ -57,16 +57,12 @@ void display_next_page(void)
 }
 
 /*-------------------------------------------------------------------------------------------------------------------
- * display_chirp — 状态进入提示音：短=十字，中=环岛/坡道/恢复，长=故障。
+ * display_chirp — 状态进入提示音：中=坡道/恢复，长=故障。
  *------------------------------------------------------------------------------------------------------------------*/
 void display_chirp(fsm_state_t state)
 {
     switch (state)
     {
-    case ST_CROSS:      g_chirp_frames = CHIRP_FRAMES_SHORT; break;
-    case ST_RING_PRE:
-    case ST_RING_IN:
-    case ST_RING_EXIT:  g_chirp_frames = CHIRP_FRAMES_MID;   break;
     case ST_RAMP:       g_chirp_frames = CHIRP_FRAMES_MID;   break;
     case ST_RECOVERY:   g_chirp_frames = CHIRP_FRAMES_MID;   break;
     case ST_FAULT:      g_chirp_frames = CHIRP_FRAMES_LONG;  break;

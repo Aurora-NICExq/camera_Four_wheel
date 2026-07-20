@@ -56,8 +56,6 @@ volatile float   steer_kd            = 6.0f;
 volatile float   steer_d_filt_alpha  = 0.4f;
 volatile uint16_t speed_straight_duty = 4500;
 volatile uint16_t speed_hard_cap     = 6000;
-volatile uint16_t speed_min_turn     = 2600;
-volatile uint16_t speed_boost_duty   = 5200;
 volatile uint16_t speed_slew_up      = 120;
 volatile int16_t  image_threshold    = 128;
 volatile uint16_t servo_center       = 750;
@@ -77,8 +75,6 @@ extern volatile float   steer_kd;
 extern volatile float   steer_d_filt_alpha;
 extern volatile uint16_t speed_straight_duty;
 extern volatile uint16_t speed_hard_cap;
-extern volatile uint16_t speed_min_turn;
-extern volatile uint16_t speed_boost_duty;
 extern volatile uint16_t speed_slew_up;
 extern volatile int16_t  image_threshold;
 extern volatile uint16_t servo_center;
@@ -119,8 +115,6 @@ const menu_item_t menu_items[] = {
     // ---- Speed ----
     MENU_U16("Straight",   speed_straight_duty, 1000, 10000, 50,  4500, PAGE_SPEED),
     MENU_U16("Hard Cap",   speed_hard_cap,      1000, 10000, 50,  6000, PAGE_SPEED),
-    MENU_U16("Min Turn",   speed_min_turn,      1000, 10000, 50,  2600, PAGE_SPEED),
-    MENU_U16("Boost",      speed_boost_duty,    1000, 10000, 50,  5200, PAGE_SPEED),
     MENU_U16("Slew Up",    speed_slew_up,       10,   1000,  10,  120,  PAGE_SPEED),
 
     // ---- Image ----

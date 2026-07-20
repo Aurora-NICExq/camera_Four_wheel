@@ -91,34 +91,7 @@
 /*==================================================================================================================*/
 
 /* --- 各元素总开关：逐个置 1 上车调试（先在 replay 回放里验证，再上车） --- */
-#define ENABLE_CROSS            (1)     /* 十字                                                                 */
-#define ENABLE_RING             (1)     /* 环岛（左右）                                                         */
 #define ENABLE_RAMP             (0)     /* 坡道（占位实现，默认关闭）                                           */
-
-/* --- 十字：一段行带内双边同时丢失，且丢失带上、下方都存在双边完好的行（上下拐点特征） --- */
-#define CROSS_BAND_ROW_LO       (10)    /* 检查行带下界（太近的行进十字时早就丢了，不作为特征）                 */
-#define CROSS_BAND_ROW_HI       (60)    /* 检查行带上界                                                         */
-#define CROSS_MIN_BOTH_LOST     (12)    /* 带内双边丢失行数 ≥ 此值才算十字特征                                  */
-#define CROSS_MIN_GOOD_BELOW    (5)     /* 丢失带下方双边完好行数下限（区别于出赛道）                           */
-#define CROSS_MIN_GOOD_ABOVE    (5)     /* 丢失带上方双边完好行数下限（十字对面赛道可见）                       */
-#define CROSS_EXIT_MAX_LOST     (4)     /* 【迟滞-退出】双边丢失行数 ≤ 此值视为已穿过十字（≠ 进入阈值）        */
-#define CROSS_EXIT_CONFIRM      (3)     /* 退出特征需连续满足的帧数                                             */
-
-/* --- 环岛：一侧边线全程连续，另一侧出现"圆弧缺口 + 拐点"。判定行带同十字。 --- */
-#define RING_BAND_ROW_LO        (8)     /* 弧侧特征检查行带下界                                                 */
-#define RING_BAND_ROW_HI        (70)    /* 弧侧特征检查行带上界                                                 */
-#define RING_ARC_MIN_LOST       (8)     /* 弧侧行带内单边丢失行数下限（环口缺口）                               */
-#define RING_ARC_MIN_GOOD_ABOVE (4)     /* 缺口上方该侧边线重新出现的行数下限（区别于普通弯道单边丢失）         */
-#define RING_SOLID_MAX_LOST     (5)     /* 连续侧允许的丢失行数上限（"连续"的量化定义）                         */
-#define RING_ARC_MIN_GOOD_BELOW (4)     /* 缺口下方连续完好行数下限；防止把从近端起始的普通单边丢线误认成环口   */
-#define RING_ENTRY_ROW          (18)    /* 【入环】缺口下沿低于此行（贴近车头）→ ST_RING_PRE 转 ST_RING_IN     */
-#define RING_ENTRY_CONFIRM      (3)     /* 入环近端特征连续确认帧数；单帧断线不得改变环岛阶段                   */
-#define RING_IN_MIN_FRAMES      (15)    /* 环内最短帧数：期间屏蔽出环判定（防止入环口被误认成出环口）          */
-#define RING_EXIT_BREAK_LOST    (10)    /* 环内侧边线再次大段丢失（出环口出现）→ 转 ST_RING_EXIT               */
-#define RING_EXIT_BREAK_CONFIRM (3)     /* 出环口断线连续确认帧数                                               */
-#define RING_EXIT_DONE_MAX_LOST (3)     /* 【迟滞-退出】双边丢失 ≤ 此值且保持，视为已出环                       */
-#define RING_EXIT_CONFIRM       (4)     /* 出环完成特征需连续满足的帧数                                         */
-#define RING_EXIT_BIAS_PX       (25)    /* ST_RING_EXIT 偏置幅值；当前约定左环出环向右取正、右环镜像取负        */
 
 /* --- 坡道（占位）：远处赛道宽度突然显著大于宽度表（上坡视角变宽）。默认关闭。 --- */
 #define RAMP_BAND_ROW_LO        (50)    /* 检查行带下界                                                         */
@@ -131,21 +104,11 @@
 /*========================================== 四、状态机（fsm.c） ====================================================*/
 /*==================================================================================================================*/
 
-/* 进入去抖：各检测器独立 M/N 参数。当前默认值保持原 4/6 行为，允许实车回放后分别整定。
- * N 必须在 [1,16]，M 必须在 [1,N]；fsm.c 有编译期断言。                                      */
-#define CROSS_CONFIRM_M         (4)
-#define CROSS_CONFIRM_N         (6)
-#define RING_CONFIRM_M          (4)
-#define RING_CONFIRM_N          (6)
+/* 进入去抖：坡道占位检测器 M/N。N 必须在 [1,16]，M 必须在 [1,N]；fsm.c 有编译期断言。 */
 #define RAMP_CONFIRM_M          (4)
 #define RAMP_CONFIRM_N          (6)
 
-/* 超时兜底：元素状态超过此帧数未见期望退出特征 → 进入 ST_RECOVERY 并记录。
- * 帧数按"最高计划占空比"整定：无编码器，帧数≠距离，占空比越高同帧数跑得越远！                    */
-#define CROSS_TIMEOUT_FRAMES    (60)    /* 十字：50fps 下 1.2 s                                                 */
-#define RING_PRE_TIMEOUT_FRAMES (75)    /* 环岛预备：迟迟等不到入环口                                           */
-#define RING_IN_TIMEOUT_FRAMES  (150)   /* 环内：3 s 还没找到出环口                                             */
-#define RING_EXIT_TIMEOUT_FRAMES (60)   /* 出环                                                                 */
+/* 超时兜底：元素状态超过此帧数未见期望退出特征 → 进入 ST_RECOVERY。 */
 #define RAMP_TIMEOUT_FRAMES     (80)    /* 坡道                                                                 */
 
 /* 元素超时不是“成功通过”：统一进入低速恢复态；恢复失败再进入吸收故障态并请求 main 解除武装。 */
@@ -154,19 +117,13 @@
 #define RECOVERY_MIN_ROWS       (45)    /* 恢复所需最小有效前瞻                                                 */
 #define RECOVERY_MAX_BOTH_LOST  (3)     /* 恢复所需最大双边同时丢失行数                                         */
 
-/* 退出冷却：回 NORMAL 后屏蔽部分检测器的"进入"判定，防止元素尾部噪声边沿立刻二次触发。
- * 掩码位见 fsm.h 的 DET_BIT_*。默认屏蔽十字/环岛/坡道。
- * 冷却永不影响失控保护（它不是检测器）。                                                      */
-#define COOLDOWN_FRAMES         (25)    /* 冷却帧数，按最高占空比下滑出元素残余特征所需距离整定                 */
-#define COOLDOWN_MASK           (DET_BIT_CROSS | DET_BIT_RING_LEFT | DET_BIT_RING_RIGHT | DET_BIT_RAMP)
+/* 退出冷却：回 NORMAL 后屏蔽部分检测器的"进入"判定。掩码位见 fsm.h 的 DET_BIT_*。 */
+#define COOLDOWN_FRAMES         (25)
+#define COOLDOWN_MASK           (DET_BIT_RAMP)
 
 /* 各状态占空比上限（契约表用）。0 = 完全断油。                                                     */
-#define CROSS_DUTY_CAP          (4000)  /* 十字直冲，可较快                                                     */
-#define RING_PRE_DUTY_CAP       (2800)  /* 入环前减速（滑行减速需要提前量，这个值宁低勿高）                     */
-#define RING_IN_DUTY_CAP        (3000)  /* 环内恒速                                                             */
-#define RING_EXIT_DUTY_CAP      (3000)  /* 出环                                                                 */
 #define RAMP_DUTY_CAP           (3200)  /* 坡道：上坡要动力、下坡怕飞车，取保守值                               */
-#define RECOVERY_DUTY_CAP       (2600)  /* 元素超时后的保守寻线速度；不得高于最小安全弯速                       */
+#define RECOVERY_DUTY_CAP       (2600)  /* 元素超时后的保守寻线速度                                             */
 
 /*==================================================================================================================*/
 /*========================================== 五、转向（control.c） ==================================================*/
@@ -192,73 +149,22 @@
                                            充满毛刺，不滤波的 D 项只会放大噪声                                  */
 
 /*==================================================================================================================*/
-/*========================================== 六、速度策略（control.c，全开环滑行式） ================================*/
+/*========================================== 六、速度策略（control.c，定速开环） ====================================*/
 /*==================================================================================================================*/
 
-/* ！！本节所有阈值是全项目最重要的整定值！！
- * 无刹车无反拖：切占空比后车只能靠滚阻+风阻滑行减速，减速距离比"有刹车的车"长得多 ——
- * 所有降速点必须比直觉提前。整定锚点：README《滑行特性标定》（TEST_COAST 模式）。
- * 硬规则：某占空比的滑行制动距离 B 若超出视觉可见距离（视觉天花板），该占空比不可用 ——
- * 是视觉、不是电机功率，决定 BOOST_DUTY 的上限。                                                   */
+/* 精简版：去掉行数/曲率/转向减速表、boost、出弯再加速门闸。仅保留基准占空比 + 硬上限 + 斜坡。 */
 
-#define STRAIGHT_DUTY           (4500)  /* 直道基准占空比（满量程 10000 的 45%，逐步上调）                      */
-#define DUTY_HARD_CAP           (6000)  /* 全局硬上限：任何逻辑（含 boost）都不得超过                          */
-#define MIN_TURN_DUTY           (2600)  /* 最小过弯占空比：滑行标定程序 (a) 步的结果 × 0.85                     */
-#define BOOST_DUTY              (5200)  /* 长直道冲刺上限：必须 ≤ 能在可见前瞻内滑回 MIN_TURN_DUTY 的速度！
-                                           上调它之前必须重新核对两张减速表                                     */
-
-/* 行数减速表：有效行数（视觉可见距离）→ 占空比上限。分段查表，行数 ≥ 最后一档给末档值。
- * 行数与实距的换算见 README 标定 (b) 步的行数↔距离表。触发过晚的症状：入弯冲出。
- * 注意：最高档必须 ≥ BOOST_DUTY，否则 boost 在结构上永远无法生效（实际速度仍由 boost 逻辑决定）。 */
-#define ROWS_DUTY_TABLE_LEN     (5)
-#define ROWS_DUTY_TABLE_ROWS    { 25,   45,   65,   85,   105  }    /* 有效行数分档（升序）                    */
-#define ROWS_DUTY_TABLE_DUTY    { 2600, 3200, 3800, 4200, 6000 }    /* 对应占空比上限（末档=DUTY_HARD_CAP）    */
-
-/* 曲率减速表：|曲率|(Q8) → 占空比上限。看得远但前方是弯，同样要提前收油。
- * 首档（近似直线）同样必须 ≥ BOOST_DUTY。                                                          */
-#define CURV_DUTY_TABLE_LEN     (4)
-#define CURV_DUTY_TABLE_CURV    { 40,   90,   160,  260  }          /* |curvature| 分档（升序，Q8）            */
-#define CURV_DUTY_TABLE_DUTY    { 6000, 3800, 3200, 2600 }          /* 对应占空比上限（曲率越大越慢）          */
-
-/* 转向减速：舵机偏离中位越多 → 占空比上限越低（打大舵还给大油门必然甩尾/推头）。
- * 上限 = DUTY_HARD_CAP − |servo−CENTER| × STEER_DUTY_SLOPE_NUM / STEER_DUTY_SLOPE_DEN，下限 MIN_TURN_DUTY。
- * ！！基准取 DUTY_HARD_CAP（硬上限）而非 STRAIGHT_DUTY —— 这是有意的：中位时本项 = 硬上限，
- *    不低于 BOOST_DUTY，才不会把长直道 boost 压回直道速度（若改用 STRAIGHT_DUTY 基准，中位处
- *    上限=STRAIGHT_DUTY<BOOST_DUTY，boost 在结构上永远失效）。见 control.c 转向减速段注释。
- * 当前参数下 |servo−CENTER| 最大 = SERVO_RANGE(110)，上限最低约 DUTY_HARD_CAP−110×18 = 4020，
- * 始终 > MIN_TURN_DUTY(2600)，故这里的"下限 MIN_TURN_DUTY"实为安全兜底、正常不触发；
- * 若要让转向减速真正压到弯速，应加大 STEER_DUTY_SLOPE_NUM（属整定项，须重做上车验证）。 */
-#define STEER_DUTY_SLOPE_NUM    (18)
-#define STEER_DUTY_SLOPE_DEN    (1)
+#define STRAIGHT_DUTY           (4500)  /* 直道/弯道统一基准占空比                                              */
+#define DUTY_HARD_CAP           (6000)  /* 全局硬上限                                                           */
 
 /* 占空比斜坡（每帧最大变化量）：
- * 降斜坡默认 10000 = 不限幅 —— 瞬间切占空比只是"开始滑行"，无反拖不会抱死，是安全的；保留宏做实验。
- * 升斜坡要小：单通道双电机同时上电流，猛给会打滑（无编码器测不到打滑，只能预防）。                */
+ * 降斜坡默认 10000 = 不限幅；升斜坡小步长防打滑，兼作解锁后软启动。                              */
 #define DUTY_SLEW_DOWN          (10000) /* 每帧最大下降量（默认不限）                                           */
-#define DUTY_SLEW_UP            (120)   /* 每帧最大上升量（50fps 下 0→4500 约 0.75 s，兼作解锁后软启动斜坡）    */
-#define ELEMENT_SPEED_MIN_ROWS  (45)    /* 环岛状态使用契约速度前所需最小可靠前瞻；不足时仍走通用保守限速       */
-
-/* 弯道出口再加速：|误差| 小 且 有效行数回升 且 |曲率| 低，连续确认后沿升斜坡回到直道占空比。
- * 出弯的早晚比直道极速更影响圈速 —— 敢于收紧这些阈值。                                            */
-#define EXIT_CONFIRM_FRAMES     (6)     /* 出弯特征连续确认帧数                                                 */
-#define EXIT_ERR_MAX            (10)    /* 出弯判定：|误差| ≤ 此值（像素）                                      */
-#define EXIT_ROWS_MIN           (70)    /* 出弯判定：有效行数 ≥ 此值                                            */
-#define EXIT_CURV_MAX           (35)    /* 出弯判定：|曲率| ≤ 此值（Q8）                                        */
-#define EXIT_MAX_BOTH_LOST      (4)     /* 出弯判定：双边丢失行 ≤ 此值。大片白区里 valid_rows 是"可行驶距离"
-                                           而非"边线可见距离"，无边区域不允许授权再加速                        */
-
-/* 长直道冲刺（boost）：近乎完美直道持续确认后允许到 BOOST_DUTY；远行一见曲率立刻退出。             */
-#define BOOST_CONFIRM_FRAMES    (25)    /* 完美直道持续帧数（50fps 下 0.5 s）                                   */
-#define BOOST_ERR_MAX           (6)     /* 完美直道判定：|误差| ≤ 此值                                          */
-#define BOOST_ROWS_MIN          (95)    /* 完美直道判定：有效行数 ≥ 此值（几乎看满前瞻）                        */
-#define BOOST_EXIT_CURV         (25)    /* 【迟滞-退出】远端 |曲率| > 此值立即退出 boost（低于进入阈值）        */
-#define BOOST_MAX_BOTH_LOST     (2)     /* 完美直道判定：双边丢失行 ≤ 此值（无边白区不是直道证据）              */
+#define DUTY_SLEW_UP            (120)   /* 每帧最大上升量（50fps 下 0→4500 约 0.75 s）                          */
 
 /* 硬件挂钩（本车没有的功能，恒 0，代码编译剔除）：                                                 */
 #define ENABLE_HW_BRAKE         (0)     /* 驱动板刹车脚：未接线。任何减速逻辑不得依赖它                         */
-#define ENABLE_VBAT_COMP        (0)     /* 电池电压补偿：本板无分压 ADC（已确认），无法实现。
-                                           后果：锂电从 8.4V 掉到 7.4V 时所有滑行标定点漂移约 13% ——
-                                           比赛前务必满电，且标定 (c) 步取"亏电电池"的最差结果                  */
+#define ENABLE_VBAT_COMP        (0)     /* 电池电压补偿：本板无分压 ADC（已确认），无法实现。                    */
 
 /*==================================================================================================================*/
 /*========================================== 七、安全 / 解锁 ========================================================*/
@@ -282,7 +188,7 @@
 #define TEST_COAST              (0)     /* 1 = 滑行标定模式：直道恒速巡航，按键或黑标记线触发切油，
                                            每帧串口输出 (frame, valid_rows, duty)。流程见 README 第 5 步        */
 #define TEST_COAST_CRUISE_DUTY  (4000)  /* 标定巡航占空比（每轮标定改这个值）                                   */
-#define TEST_COAST_TARGET_DUTY  (0)     /* 触发后的目标占空比（测全滑行填 0，测降档滑行填 MIN_TURN_DUTY）       */
+#define TEST_COAST_TARGET_DUTY  (0)     /* 触发后的目标占空比（测全滑行填 0）                                   */
 #define TEST_COAST_MARKER_ROWS  (30)    /* 有效行数骤降到此值以下 = 检测到横贯赛道的黑标记条（自动触发切油）    */
 
 /*==================================================================================================================*/
@@ -300,9 +206,9 @@
 #define ENABLE_UART_IMAGE       (0)     /* 1 = 串口回传整帧图像（仅 DEBUG_NO_DRIVE=1 时编译；分块非阻塞：
                                            每帧只发半行 94 字节 ≈8 ms@115200，整帧约 4.8 s —— 静态调试用）      */
 
-/* 蜂鸣器状态提示音时长（帧）：不同元素不同长短，跑动中靠听判断触发了什么                            */
-#define CHIRP_FRAMES_SHORT      (3)     /* 短鸣：十字                                                           */
-#define CHIRP_FRAMES_MID        (8)     /* 中鸣：环岛系列                                                       */
+/* 蜂鸣器状态提示音时长（帧）                                                                        */
+#define CHIRP_FRAMES_SHORT      (3)     /* 短鸣（保留）                                                         */
+#define CHIRP_FRAMES_MID        (8)     /* 中鸣：坡道 / 恢复                                                    */
 #define CHIRP_FRAMES_LONG       (20)    /* 长鸣：故障 / 失控保护                                                */
 
 /* 按键功能分配（索引对应 zf_device_key.h 的 KEY_LIST）                                              */
