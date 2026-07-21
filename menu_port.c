@@ -1,5 +1,6 @@
 /* menu_port.c - menu HAL (IPS200 + keys) */
 #include "zf_common_headfile.h"
+#include "pins.h"
 #include "menu_port.h"
 
 #define MENU_FLASH_SECTOR   (0)      // 与逐飞 EEPROM demo 一致：sector 0 / page 8（DFLASH 挑一页别人不用的）
@@ -11,9 +12,10 @@ uint32_t menu_port_millis(void)     // STM 系统定时器（motor_hw_init 已 s
     return (uint32_t)(system_getval_us() / 1000u);
 }
 
-void menu_port_init(void)           // 8x16 字体 → 30 列 × 20 行（竖屏）
+void menu_port_init(void)
 {
-    /* 方向已在 display_init() 里、ips200_init 之前设为 IPS200_PORTAIT。此处只设字体。 */
+    ips200_set_dir(IPS200_PORTAIT);
+    ips200_init(IPS200_CONNECT_TYPE);
     ips200_set_font(IPS200_8X16_FONT);
     ips200_clear();
 }

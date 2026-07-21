@@ -1,4 +1,4 @@
-/* image.c - 八邻域 v2.0 双边跟踪 + 最小二乘十字补线（Develop/八邻域_v2.0） */
+/* image.c - 八邻域双边巡线 + 十字补线 */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -604,7 +604,6 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     if (lo > hi)
     {
         ti->valid_rows = 0;
-        ti->longest_col = IMG_CENTER;
         ti->both_lost_rows = 0;
         return;
     }
@@ -625,7 +624,6 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     }
 
     ti->valid_rows = (uint8_t)(hi - lo + 1u);
-    ti->longest_col = start_point_l[0];
     ti->both_lost_rows = both_lost;
 }
 
@@ -683,127 +681,6 @@ static int16_t segment_slope_q8(const track_info_t *ti, uint8_t lo, uint8_t hi, 
                      (int32_t)(hi - lo));
 }
 
-uint8_t detect_cross(const track_info_t *ti)
-{
-#if ENABLE_CROSS
-    return ti->cross_valid;
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-static uint8_t ring_side_signature(const track_info_t *ti,
-                                   const uint8_t *arc_lost, const uint8_t *solid_lost,
-                                   uint8_t *gap_lo)
-{
-    uint8_t r;
-    uint8_t hi = (ti->valid_rows < RING_BAND_ROW_HI) ? ti->valid_rows : RING_BAND_ROW_HI;
-    uint8_t solid_lost_cnt = 0;
-
-    for (r = RING_BAND_ROW_LO; r < hi; r++)
-    {
-        if (solid_lost[r]) solid_lost_cnt++;
-    }
-    if (solid_lost_cnt > RING_SOLID_MAX_LOST) return 0;
-
-    for (r = RING_BAND_ROW_LO; r < hi; r++)
-    {
-        uint8_t end;
-        uint8_t good_below = 0;
-        uint8_t good_above = 0;
-        int16_t rr;
-
-        if (!arc_lost[r]) continue;
-        end = r;
-        while (end < hi && arc_lost[end]) end++;
-
-        for (rr = (int16_t)r - 1; rr >= RING_BAND_ROW_LO; rr--)
-        {
-            if (arc_lost[rr]) break;
-            good_below++;
-        }
-        for (rr = end; rr < hi; rr++)
-        {
-            if (arc_lost[rr]) break;
-            good_above++;
-        }
-
-        if ((uint8_t)(end - r) >= RING_ARC_MIN_LOST &&
-            good_below >= RING_ARC_MIN_GOOD_BELOW &&
-            good_above >= RING_ARC_MIN_GOOD_ABOVE)
-        {
-            *gap_lo = r;
-            return 1;
-        }
-        if (end > r) r = (uint8_t)(end - 1u);
-    }
-    return 0;
-}
-
-uint8_t detect_ring_left(const track_info_t *ti)
-{
-#if ENABLE_RING
-    uint8_t gap_lo;
-    return ring_side_signature(ti, ti->left_lost, ti->right_lost, &gap_lo);
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-uint8_t detect_ring_right(const track_info_t *ti)
-{
-#if ENABLE_RING
-    uint8_t gap_lo;
-    return ring_side_signature(ti, ti->right_lost, ti->left_lost, &gap_lo);
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-uint8_t detect_ramp(const track_info_t *ti)
-{
-#if ENABLE_RAMP
-    uint8_t r;
-    uint8_t wide_rows = 0;
-    uint8_t hi = (ti->valid_rows < RAMP_BAND_ROW_HI) ? ti->valid_rows : RAMP_BAND_ROW_HI;
-    for (r = RAMP_BAND_ROW_LO; r < hi; r++)
-    {
-        if (!ti->left_lost[r] && !ti->right_lost[r])
-        {
-            uint16_t measured = (uint16_t)(ti->right[r] - ti->left[r]);
-            if (measured * 100u > (uint16_t)ti->width[r] * RAMP_WIDTH_NUM) wide_rows++;
-        }
-    }
-    return (uint8_t)(wide_rows >= RAMP_MIN_ROWS);
-#else
-    (void)ti;
-    return 0;
-#endif
-}
-
-uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
-{
-    *severe = 0;
-    if (ti->valid_rows < FAILSAFE_MIN_ROWS)
-    {
-        *severe = (uint8_t)(ti->valid_rows == 0u);
-        return 1;
-    }
-    {
-        uint16_t lost_pct_lhs = (uint16_t)ti->both_lost_rows * 100u;
-        uint16_t rows_rhs = (uint16_t)ti->valid_rows;
-        if (lost_pct_lhs >= rows_rhs * FAILSAFE_SEVERE_BOTH_LOST_PCT)
-        {
-            *severe = 1;
-            return 1;
-        }
-        return (uint8_t)(lost_pct_lhs >= rows_rhs * FAILSAFE_MAX_BOTH_LOST_PCT);
-    }
-}
-
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
 {
     uint8_t th;
@@ -835,14 +712,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     }
     else
     {
-        export_track(out, EIGHTN_START_ROW + 1u); /* lo > hi → valid_rows = 0 */
+        export_track(out, EIGHTN_START_ROW + 1u);
     }
-
-    out->det_cross = cross_flag;
-    out->det_ring_left = detect_ring_left(out);
-    out->det_ring_right = detect_ring_right(out);
-    out->det_ramp = detect_ramp(out);
-    out->det_value = (int16_t)out->both_lost_rows;
 
     if (out->valid_rows > CURV_FAR_ROW_LO)
     {
@@ -858,4 +729,24 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     }
 
     out->error = weighted_error(out, duty_now);
+}
+
+uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
+{
+    *severe = 0;
+    if (ti->valid_rows < FAILSAFE_MIN_ROWS)
+    {
+        *severe = (uint8_t)(ti->valid_rows == 0u);
+        return 1;
+    }
+    {
+        uint16_t lost_pct_lhs = (uint16_t)ti->both_lost_rows * 100u;
+        uint16_t rows_rhs = (uint16_t)ti->valid_rows;
+        if (lost_pct_lhs >= rows_rhs * FAILSAFE_SEVERE_BOTH_LOST_PCT)
+        {
+            *severe = 1;
+            return 1;
+        }
+        return (uint8_t)(lost_pct_lhs >= rows_rhs * FAILSAFE_MAX_BOTH_LOST_PCT);
+    }
 }
