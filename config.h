@@ -111,6 +111,7 @@
 #define SERVO_MAX               (850)   /* 右极限 */
 #define SERVO_DIR               (+1)    /* +1=正误差打右；反了改 -1 */
 #define SERVO_SLEW_LIMIT        (45)    /* 每帧最大舵机步进 */
+#define SERVO_RANGE             (110)   /* 机械偏移上限 duty（注释/整定参考） */
 
 /* PD：Kp 随 |e| 二次调度 */
 #define USE_CONST_KP            (0)     /* 1=恒定 Kp 调试 */
@@ -121,11 +122,39 @@
 #define KD                      (6.0f)
 #define D_FILT_ALPHA            (0.4f)  /* D 项 EMA，抑量化毛刺 */
 
-/* speed：基准 duty + 硬上限 + 斜坡 */
-#define STRAIGHT_DUTY           (4500)
+/* speed：行数/曲率/转向减速表 + boost + 出弯再加速 + 斜坡 */
+#define STRAIGHT_DUTY           (4500)  /* 直道基准占空比 */
 #define DUTY_HARD_CAP           (6000)  /* 满量程 10000 的 60% */
+#define MIN_TURN_DUTY           (2600)  /* 最小过弯占空比（滑行标定） */
+#define BOOST_DUTY              (5200)  /* 长直道冲刺上限 */
+
+#define ROWS_DUTY_TABLE_LEN     (5)
+#define ROWS_DUTY_TABLE_ROWS    { 25,   45,   65,   85,   105  }
+#define ROWS_DUTY_TABLE_DUTY    { 2600, 3200, 3800, 4200, 6000 }
+
+#define CURV_DUTY_TABLE_LEN     (4)
+#define CURV_DUTY_TABLE_CURV    { 40,   90,   160,  260  }
+#define CURV_DUTY_TABLE_DUTY    { 6000, 3800, 3200, 2600 }
+
+#define STEER_DUTY_SLOPE_NUM    (18)
+#define STEER_DUTY_SLOPE_DEN    (1)
+
 #define DUTY_SLEW_DOWN          (10000) /* 每帧最大降（默认不限） */
 #define DUTY_SLEW_UP            (120)   /* 每帧最大升；兼软启动 */
+#define ELEMENT_SPEED_MIN_ROWS  (45)    /* 环岛契约速度所需最小前瞻 */
+
+#define EXIT_CONFIRM_FRAMES     (6)     /* 出弯再加速确认帧数 */
+#define EXIT_ERR_MAX            (10)    /* 出弯判定 |误差| 上限（像素） */
+#define EXIT_ROWS_MIN           (70)    /* 出弯判定有效行下限 */
+#define EXIT_CURV_MAX           (35)    /* 出弯判定 |曲率| 上限（Q8） */
+#define EXIT_MAX_BOTH_LOST      (4)     /* 出弯判定双边丢失上限 */
+
+#define BOOST_CONFIRM_FRAMES    (25)    /* 长直道 boost 确认帧数 */
+#define BOOST_ERR_MAX           (6)     /* boost 判定 |误差| 上限 */
+#define BOOST_ROWS_MIN          (95)    /* boost 判定有效行下限 */
+#define BOOST_EXIT_CURV         (25)    /* boost 退出 |曲率| 阈值（Q8） */
+#define BOOST_MAX_BOTH_LOST     (2)     /* boost 判定双边丢失上限 */
+
 #define ENABLE_HW_BRAKE         (0)     /* 未接线 */
 #define ENABLE_VBAT_COMP        (0)     /* 无分压 ADC */
 
