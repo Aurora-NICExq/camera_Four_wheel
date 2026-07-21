@@ -4,3 +4,6 @@
 *.dylib
 *.d
 .DS_Store
+
+# Markdown docs (local notes, not versioned)
+*.md
