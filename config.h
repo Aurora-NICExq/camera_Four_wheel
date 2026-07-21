@@ -116,11 +116,11 @@
 /* steer：50Hz→1 duty=2µs；MIN/MAX 为机械极限，超程伤齿轮 */
 #define SERVO_PWM_HZ            (50)
 #define SERVO_CENTER            (770)   /* 直行中位 duty */
-#define SERVO_MIN               (685)   /* 左极限 */
-#define SERVO_MAX               (850)   /* 右极限 */
-#define SERVO_DIR               (+1)    /* +1=正误差打右；反了改 -1 */
+#define SERVO_MIN               (685)   /* 右极限（duty 减小 → 右转） */
+#define SERVO_MAX               (850)   /* 左极限（duty 增大 → 左转） */
+#define SERVO_DIR               (-1)    /* -1=正误差减 duty 打右；装反了改 +1 */
 #define SERVO_SLEW_LIMIT        (45)    /* 每帧最大舵机步进 */
-#define SERVO_RANGE             (110)   /* 机械偏移上限 duty（注释/整定参考） */
+#define SERVO_RANGE             (85)    /* 中位到单侧机械极限（max(770-685,850-770)） */
 
 /* PD：Kp 随 |e| 二次调度 */
 #define USE_CONST_KP            (0)     /* 1=恒定 Kp 调试 */
