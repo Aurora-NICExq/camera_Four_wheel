@@ -1,4 +1,4 @@
-/* image.h - track_info_t + 18th 最长白列巡线 detectors */
+/* image.h - track_info_t + 八邻域 v2.0 巡线 detectors */
 #ifndef IMAGE_H
 #define IMAGE_H
 
@@ -28,7 +28,7 @@ typedef struct
     uint8_t  inflect_row;       /* 十字补线起始行；无则 0xFF */
     int16_t  det_value;
 
-    /* 十字补线（18th Cross_Detect 覆盖区间） */
+    /* 十字补线（八邻域生长方向 + 最小二乘延伸） */
     uint8_t  cross_filled[IMG_H]; /* 1=该行坐标被十字连接覆盖 */
     uint8_t  cross_valid;         /* 本帧找到可靠十字连接 */
     uint8_t  cross_lo;            /* 补线区间起点（含） */

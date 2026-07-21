@@ -50,9 +50,18 @@
 #define CROSS_EXIT_MAX_LOST     (4)
 #define CROSS_EXIT_CONFIRM      (3)
 
-/* 18th 最长白列 / 十字（移植 the-18th-smartcar） */
-#define TH18_COL_MARGIN         (20)    /* 最长白列搜索左右留白 */
-#define TH18_CROSS_BOTH_LOST_MIN (10)   /* 十字：双边丢线行数下限 */
+/* 八邻域 v2.0（Develop/八邻域_v2.0） */
+#define EIGHTN_START_ROW        (IMG_H - 2) /* 起点搜索行（近车） */
+#define EIGHTN_BORDER_MIN       (1)         /* 边线默认左界 / 左丢线哨兵 */
+#define EIGHTN_BORDER_MAX       (IMG_W - 2) /* 边线默认右界 / 右丢线哨兵 */
+#define EIGHTN_MAX_POINTS       (IMG_H * 3) /* 轮廓点缓冲上限 */
+#define EIGHTN_FILTER_SUM_MAX   (255 * 5)   /* 形态学膨胀：邻域白像素和阈值 */
+#define EIGHTN_FILTER_SUM_MIN   (255 * 2)   /* 形态学腐蚀：邻域白像素和阈值 */
+#define EIGHTN_CROSS_SLOPE_BACK (15)        /* 十字补线：斜率拟合起点相对 break 行 */
+#define EIGHTN_CROSS_SLOPE_NEAR (5)         /* 十字补线：斜率拟合终点 / 补线起点相对 break 行 */
+#define EIGHTN_CROSS_CORNER_L   (4)         /* 底行白角检测左列 */
+#define EIGHTN_CROSS_CORNER_R   (IMG_W - 4) /* 底行白角检测右列 */
+#define EIGHTN_MEET_DIST        (2)         /* 左右轮廓相遇判定距离（像素） */
 
 #define RING_BAND_ROW_LO        (8)
 #define RING_BAND_ROW_HI        (70)
