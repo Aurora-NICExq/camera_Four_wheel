@@ -733,15 +733,26 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
 {
+    uint8_t rows = ti->valid_rows;
+    uint8_t lost = ti->both_lost_rows;
+
     *severe = 0;
-    if (ti->valid_rows < FAILSAFE_MIN_ROWS)
+    /* 远端连续双丢行是八邻域搜索未到达的区域（左右搜索未相遇时
+       hightest_row 保持 0，未搜索行保持初始化的极值边界），不代表
+       车已冲出赛道，不计入失效统计 */
+    while (rows > 0u && ti->left_lost[rows - 1u] && ti->right_lost[rows - 1u])
     {
-        *severe = (uint8_t)(ti->valid_rows == 0u);
+        rows--;
+        lost--;
+    }
+    if (rows < FAILSAFE_MIN_ROWS)
+    {
+        *severe = (uint8_t)(rows == 0u);
         return 1;
     }
     {
-        uint16_t lost_pct_lhs = (uint16_t)ti->both_lost_rows * 100u;
-        uint16_t rows_rhs = (uint16_t)ti->valid_rows;
+        uint16_t lost_pct_lhs = (uint16_t)lost * 100u;
+        uint16_t rows_rhs = (uint16_t)rows;
         if (lost_pct_lhs >= rows_rhs * FAILSAFE_SEVERE_BOTH_LOST_PCT)
         {
             *severe = 1;
