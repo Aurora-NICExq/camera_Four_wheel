@@ -67,8 +67,8 @@
 #define STEER_DUTY_SLOPE_NUM    (18)
 #define STEER_DUTY_SLOPE_DEN    (1)
 
-#define DUTY_SLEW_DOWN          (10000)
-#define DUTY_SLEW_UP            (10000)
+#define DUTY_SLEW_DOWN          (10000) /* 减速不限幅，目标降低时立即跟进 */
+#define DUTY_SLEW_UP            (50)    /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
 #define FAILSAFE_MIN_ROWS       (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)

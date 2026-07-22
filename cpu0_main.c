@@ -69,6 +69,8 @@ int core0_main(void) {
       control_duty_prev = 0;
       if (!drive_en) {
         control_init();
+      } else {
+        control_duty_reset();
       }
     }
 

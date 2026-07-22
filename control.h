@@ -20,6 +20,7 @@ extern volatile uint16_t control_duty_prev;
 
 void control_init(void);
 void control_reset(void);
+void control_duty_reset(void);
 void control_update(const track_info_t *ti, control_out_t *out);
 uint16_t control_servo_clamp(int32_t servo_raw);
 

@@ -52,6 +52,11 @@ void control_reset(void)
     control_duty_prev = 0;
 }
 
+void control_duty_reset(void)
+{
+    g_duty_now = 0;
+}
+
 void control_update(const track_info_t *ti, control_out_t *out)
 {
     int16_t error = ti->error;
