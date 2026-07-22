@@ -78,7 +78,10 @@
 
 #define MOTOR_PWM_FREQ (17000)
 
-#define KEY_SCAN_PERIOD_MS (10) /* 须与 key_init() 一致；库内 KEY_MAX_SHOCK_PERIOD=10 次扫描 */
-#define KEY_REPEAT_MS (80)      /* UP/DOWN 在 KEY_LONG_PRESS 期间的连发间隔 */
+#define KEY_SCAN_PERIOD_MS (5)  /* 按键扫描周期；与实测参考工程 JOYSTICK_SCAN_PERIOD_MS 一致 */
+#define KEY_DEBOUNCE_MS (20)    /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
+#define KEY_DEBOUNCE_COUNT (KEY_DEBOUNCE_MS / KEY_SCAN_PERIOD_MS)
+#define KEY_LONG_PRESS_MS (1000) /* UP/DOWN 按住超过该时长后开始连发 */
+#define KEY_REPEAT_MS (80)       /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
 
 #endif /* CONFIG_H */
