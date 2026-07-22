@@ -4,44 +4,15 @@
 #include "config.h"
 #include "menu_port.h"
 
-#define MENU_FLASH_SECTOR   (0)      // 与逐飞 EEPROM demo 一致：sector 0 / page 8（DFLASH 挑一页别人不用的）
-#define MENU_FLASH_PAGE     (8)
-#define KEY_EVQ_LEN         (8)
+#define MENU_FLASH_SECTOR    (0)
+#define MENU_FLASH_PAGE      (8)
+#define KEY_EVQ_LEN          (8)
 
-typedef enum
-{
-    KS_IDLE = 0,
-    KS_DEBOUNCE,
-    KS_HELD,
-    KS_REPEAT,
-} key_fsm_state_e;
-
-typedef struct
-{
-    gpio_pin_enum   pin;
-    menu_key_e      map;
-    uint8_t         allow_repeat;
-    key_fsm_state_e state;
-    uint32_t        t_state;
-} key_fsm_t;
-
-static volatile uint32_t s_tick_ms = 0;
 static volatile uint8_t s_evq_head = 0;
 static volatile uint8_t s_evq_tail = 0;
 static menu_key_event_t s_evq[KEY_EVQ_LEN];
-
-static key_fsm_t s_keys[4] =
-{
-    { PIN_KEY_UP,    MENU_KEY_UP,    1, KS_IDLE, 0 },
-    { PIN_KEY_DOWN,  MENU_KEY_DOWN,  1, KS_IDLE, 0 },
-    { PIN_KEY_ENTER, MENU_KEY_ENTER, 0, KS_IDLE, 0 },
-    { PIN_KEY_BACK,  MENU_KEY_BACK,  0, KS_IDLE, 0 },
-};
-
-static uint8_t key_pressed(gpio_pin_enum pin)
-{
-    return (gpio_get_level(pin) == GPIO_LOW) ? 1u : 0u;
-}
+static uint32_t s_last_scan_ms = 0;
+static uint32_t s_last_repeat_ms = 0;
 
 static void key_evq_push(menu_key_e key, uint8_t is_repeat)
 {
@@ -57,96 +28,63 @@ static void key_evq_push(menu_key_e key, uint8_t is_repeat)
     s_evq_tail = next;
 }
 
-static void key_fsm_tick_one(key_fsm_t *k)
+static void key_poll_library(void)
 {
-    uint32_t now = s_tick_ms;
-    uint8_t raw = key_pressed(k->pin);
+    key_state_enum up;
+    key_state_enum down;
 
-    switch (k->state)
+    if (key_get_state(KEY_3) == KEY_SHORT_PRESS)
     {
-    case KS_IDLE:
-        if (raw)
-        {
-            k->state = KS_DEBOUNCE;
-            k->t_state = now;
-        }
-        break;
+        key_clear_state(KEY_3);
+        key_evq_push(MENU_KEY_ENTER, 0);
+        return;
+    }
+    if (key_get_state(KEY_4) == KEY_SHORT_PRESS)
+    {
+        key_clear_state(KEY_4);
+        key_evq_push(MENU_KEY_BACK, 0);
+        return;
+    }
 
-    case KS_DEBOUNCE:
-        if (!raw)
-        {
-            k->state = KS_IDLE;
-        }
-        else if ((now - k->t_state) >= (uint32)KEY_DEBOUNCE_MS)
-        {
-            k->state = KS_HELD;
-            k->t_state = now;
-            key_evq_push(k->map, 0);
-        }
-        break;
+    up = key_get_state(KEY_1);
+    down = key_get_state(KEY_2);
 
-    case KS_HELD:
-        if (!raw)
-        {
-            k->state = KS_IDLE;
-        }
-        else if (k->allow_repeat && (now - k->t_state) >= (uint32)KEY_LONG_MS)
-        {
-            k->state = KS_REPEAT;
-            k->t_state = now;
-            key_evq_push(k->map, 1);
-        }
-        break;
+    if (up == KEY_SHORT_PRESS)
+    {
+        key_clear_state(KEY_1);
+        key_evq_push(MENU_KEY_UP, 0);
+        return;
+    }
+    if (down == KEY_SHORT_PRESS)
+    {
+        key_clear_state(KEY_2);
+        key_evq_push(MENU_KEY_DOWN, 0);
+        return;
+    }
 
-    case KS_REPEAT:
-        if (!raw)
+    if (up == KEY_LONG_PRESS || down == KEY_LONG_PRESS)
+    {
+        uint32_t now = menu_port_millis();
+        if ((now - s_last_repeat_ms) >= (uint32)KEY_REPEAT_MS)
         {
-            k->state = KS_IDLE;
+            s_last_repeat_ms = now;
+            key_evq_push((up == KEY_LONG_PRESS) ? MENU_KEY_UP : MENU_KEY_DOWN, 1);
         }
-        else if ((now - k->t_state) >= (uint32)KEY_REPEAT_MS)
-        {
-            k->t_state = now;
-            key_evq_push(k->map, 1);
-        }
-        break;
-
-    default:
-        k->state = KS_IDLE;
-        break;
     }
 }
 
 static void menu_port_keys_init(void)
 {
-    uint8_t i;
-
-    for (i = 0; i < 4u; i++)
-    {
-        gpio_init(s_keys[i].pin, GPI, GPIO_HIGH, GPI_PULL_UP);
-        s_keys[i].state = KS_IDLE;
-        s_keys[i].t_state = 0;
-    }
-
+    key_init(KEY_SCAN_PERIOD_MS);
     s_evq_head = 0;
     s_evq_tail = 0;
-    s_tick_ms = 0;
-    pit_ms_init(CCU60_CH0, KEY_SCAN_MS);
-}
-
-void menu_port_key_tick(void)
-{
-    uint8_t i;
-
-    s_tick_ms += (uint32)KEY_SCAN_MS;
-    for (i = 0; i < 4u; i++)
-    {
-        key_fsm_tick_one(&s_keys[i]);
-    }
+    s_last_scan_ms = menu_port_millis();
+    s_last_repeat_ms = 0;
 }
 
 uint32_t menu_port_millis(void)
 {
-    return (uint32_t)s_tick_ms;
+    return (uint32_t)(system_getval_us() / 1000u);
 }
 
 void menu_port_init(void)
@@ -167,7 +105,17 @@ void menu_port_init(void)
 
 void menu_port_key_scan(void)
 {
-    /* 扫描在 CCU60_CH0 PIT ISR 中完成；此处保留 API 兼容 */
+    uint32_t now_ms = menu_port_millis();
+    uint8_t iter = 0;
+
+    while (((now_ms - s_last_scan_ms) >= (uint32)KEY_SCAN_PERIOD_MS) && (iter < 8u))
+    {
+        s_last_scan_ms += (uint32)KEY_SCAN_PERIOD_MS;
+        key_scanner();
+        key_poll_library();
+        iter++;
+        now_ms = menu_port_millis();
+    }
 }
 
 void menu_port_clear(void)
@@ -202,9 +150,7 @@ void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint
     ips200_show_float((uint16)(col * 8), (uint16)(row * 16), (double)v, (uint8)int_w, (uint8)dec_w);
 }
 
-// Input
-//   KEY_1=UP  KEY_2=DOWN  KEY_3=ENTER  KEY_4=BACK
-//   5ms PIT 状态机：消抖后立刻触发；UP/DOWN 长按连发（is_repeat=1 -> 10x 步进）。
+// KEY_1=UP KEY_2=DOWN KEY_3=ENTER KEY_4=BACK（库内 KEY_LIST = P20_6,P20_7,P11_2,P11_3）
 void menu_port_scan_keys(menu_key_event_t *ev)
 {
     ev->key = MENU_KEY_NONE;

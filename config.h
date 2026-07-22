@@ -78,9 +78,7 @@
 
 #define MOTOR_PWM_FREQ (17000)
 
-#define KEY_SCAN_MS (5)      /* PIT 扫描周期 */
-#define KEY_DEBOUNCE_MS (15) /* 消抖确认时间 */
-#define KEY_LONG_MS (280)    /* 长按后开始连发 */
-#define KEY_REPEAT_MS (70)   /* 连发间隔 */
+#define KEY_SCAN_PERIOD_MS (10) /* 须与 key_init() 一致；库内 KEY_MAX_SHOCK_PERIOD=10 次扫描 */
+#define KEY_REPEAT_MS (80)      /* UP/DOWN 在 KEY_LONG_PRESS 期间的连发间隔 */
 
 #endif /* CONFIG_H */

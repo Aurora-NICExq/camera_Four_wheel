@@ -15,7 +15,6 @@
 #define PIN_MOTOR_BRAKE     /* unused */
 #define PIN_BUZZER          (P33_10)
 
-/* 逐飞 TC264 核心板四键：按下为低电平 */
 #define PIN_KEY_UP          (P20_6)
 #define PIN_KEY_DOWN        (P20_7)
 #define PIN_KEY_ENTER       (P11_2)

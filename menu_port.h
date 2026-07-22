@@ -37,9 +37,8 @@ typedef struct
 void     menu_port_init(void);          // display + font
 uint32_t menu_port_millis(void);        // free-running millisecond counter
 
-// Legacy hook: key scan runs in CCU60_CH0 PIT ISR (menu_port_key_tick). Safe to call every frame.
+// Call every loop iteration; advances GPIO key FSM and fills the event queue.
 void     menu_port_key_scan(void);
-void     menu_port_key_tick(void);      // call from cc60_pit_ch0_isr only
 
 //--------------------------------------------------------------------------------------------------------------------
 // Display primitives -- (col,row) are character cells. Numbers are drawn with the SeekFree ips200 show
@@ -52,7 +51,7 @@ void menu_port_draw_uint (uint8_t col, uint8_t row, uint32_t v, uint8_t width, m
 void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint8_t dec_w, menu_style_e style);
 
 //--------------------------------------------------------------------------------------------------------------------
-// Input : returns at most one event per call (priority ENTER > BACK > UP > DOWN).
+// Input : dequeue one event per call; FIFO order.
 //--------------------------------------------------------------------------------------------------------------------
 void menu_port_scan_keys(menu_key_event_t *ev);
 

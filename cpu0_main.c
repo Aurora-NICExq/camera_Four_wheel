@@ -29,6 +29,8 @@ int core0_main(void) {
   control_out_t out = {0};
 
   while (TRUE) {
+    menu_task();
+
     if (!mt9v03x_finish_flag) {
       continue;
     }
@@ -74,7 +76,6 @@ int core0_main(void) {
       }
     }
 
-    menu_task();
     if (menu_camera_view())
     {
       ips200_displayimage03x((const uint8 *)mt9v03x_image, IMG_W, IMG_H);
