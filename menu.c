@@ -304,15 +304,11 @@ void menu_init(void)
     draw_list_full();
 }
 
-void menu_task(void)
+static void menu_handle_key(const menu_key_event_t *ev)
 {
-    menu_key_event_t ev;
-    menu_port_key_scan();
-    menu_port_scan_keys(&ev);
-
     if (s_camera_view)
     {
-        if (ev.key == MENU_KEY_BACK)
+        if (ev->key == MENU_KEY_BACK)
         {
             s_camera_view = 0;
             draw_list_full();
@@ -322,15 +318,31 @@ void menu_task(void)
 
     if (s_nav == NAV_LIST)
     {
-        if      (ev.key == MENU_KEY_UP)    list_move(-1);
-        else if (ev.key == MENU_KEY_DOWN)  list_move(+1);
-        else if (ev.key == MENU_KEY_ENTER) item_enter();
+        if      (ev->key == MENU_KEY_UP)    list_move(-1);
+        else if (ev->key == MENU_KEY_DOWN)  list_move(+1);
+        else if (ev->key == MENU_KEY_ENTER) item_enter();
     }
     else /* NAV_EDIT */
     {
-        if      (ev.key == MENU_KEY_UP)    edit_adjust(+1, ev.is_repeat);
-        else if (ev.key == MENU_KEY_DOWN)  edit_adjust(-1, ev.is_repeat);
-        else if (ev.key == MENU_KEY_ENTER) edit_end(true);
-        else if (ev.key == MENU_KEY_BACK)  edit_end(false);
+        if      (ev->key == MENU_KEY_UP)    edit_adjust(+1, ev->is_repeat);
+        else if (ev->key == MENU_KEY_DOWN)  edit_adjust(-1, ev->is_repeat);
+        else if (ev->key == MENU_KEY_ENTER) edit_end(true);
+        else if (ev->key == MENU_KEY_BACK)  edit_end(false);
+    }
+}
+
+void menu_task(void)
+{
+    menu_key_event_t ev;
+
+    menu_port_key_scan();
+    while (1)
+    {
+        menu_port_scan_keys(&ev);
+        if (ev.key == MENU_KEY_NONE)
+        {
+            break;
+        }
+        menu_handle_key(&ev);
     }
 }

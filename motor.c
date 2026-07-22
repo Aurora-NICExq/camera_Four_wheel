@@ -26,8 +26,6 @@ void motor_hw_init(void)
     motor_stop();
 
     gpio_init(PIN_BUZZER, GPO, GPIO_LOW, GPO_PUSH_PULL);
-
-    key_init(1000 / FRAMES_PER_SECOND);
 }
 
 void motor_apply(uint16_t servo_pwm, uint16_t duty)

@@ -1,42 +1,174 @@
 /* menu_port.c - menu HAL (IPS200 + keys) */
 #include "zf_common_headfile.h"
 #include "pins.h"
+#include "config.h"
 #include "menu_port.h"
 
 #define MENU_FLASH_SECTOR   (0)      // 与逐飞 EEPROM demo 一致：sector 0 / page 8（DFLASH 挑一页别人不用的）
 #define MENU_FLASH_PAGE     (8)
-#define KEY_REPEAT_MS       (120)    // 长按自动重复周期
+#define KEY_EVQ_LEN         (8)
 
-uint32_t menu_port_millis(void)     // STM 系统定时器（motor_hw_init 已 system_start）
+typedef enum
 {
-    return (uint32_t)(system_getval_us() / 1000u);
+    KS_IDLE = 0,
+    KS_DEBOUNCE,
+    KS_HELD,
+    KS_REPEAT,
+} key_fsm_state_e;
+
+typedef struct
+{
+    gpio_pin_enum   pin;
+    menu_key_e      map;
+    uint8_t         allow_repeat;
+    key_fsm_state_e state;
+    uint32_t        t_state;
+} key_fsm_t;
+
+static volatile uint32_t s_tick_ms = 0;
+static volatile uint8_t s_evq_head = 0;
+static volatile uint8_t s_evq_tail = 0;
+static menu_key_event_t s_evq[KEY_EVQ_LEN];
+
+static key_fsm_t s_keys[4] =
+{
+    { PIN_KEY_UP,    MENU_KEY_UP,    1, KS_IDLE, 0 },
+    { PIN_KEY_DOWN,  MENU_KEY_DOWN,  1, KS_IDLE, 0 },
+    { PIN_KEY_ENTER, MENU_KEY_ENTER, 0, KS_IDLE, 0 },
+    { PIN_KEY_BACK,  MENU_KEY_BACK,  0, KS_IDLE, 0 },
+};
+
+static uint8_t key_pressed(gpio_pin_enum pin)
+{
+    return (gpio_get_level(pin) == GPIO_LOW) ? 1u : 0u;
+}
+
+static void key_evq_push(menu_key_e key, uint8_t is_repeat)
+{
+    uint8_t next = (uint8_t)((s_evq_tail + 1u) % KEY_EVQ_LEN);
+
+    if (next == s_evq_head)
+    {
+        return;
+    }
+
+    s_evq[s_evq_tail].key = key;
+    s_evq[s_evq_tail].is_repeat = is_repeat;
+    s_evq_tail = next;
+}
+
+static void key_fsm_tick_one(key_fsm_t *k)
+{
+    uint32_t now = s_tick_ms;
+    uint8_t raw = key_pressed(k->pin);
+
+    switch (k->state)
+    {
+    case KS_IDLE:
+        if (raw)
+        {
+            k->state = KS_DEBOUNCE;
+            k->t_state = now;
+        }
+        break;
+
+    case KS_DEBOUNCE:
+        if (!raw)
+        {
+            k->state = KS_IDLE;
+        }
+        else if ((now - k->t_state) >= (uint32)KEY_DEBOUNCE_MS)
+        {
+            k->state = KS_HELD;
+            k->t_state = now;
+            key_evq_push(k->map, 0);
+        }
+        break;
+
+    case KS_HELD:
+        if (!raw)
+        {
+            k->state = KS_IDLE;
+        }
+        else if (k->allow_repeat && (now - k->t_state) >= (uint32)KEY_LONG_MS)
+        {
+            k->state = KS_REPEAT;
+            k->t_state = now;
+            key_evq_push(k->map, 1);
+        }
+        break;
+
+    case KS_REPEAT:
+        if (!raw)
+        {
+            k->state = KS_IDLE;
+        }
+        else if ((now - k->t_state) >= (uint32)KEY_REPEAT_MS)
+        {
+            k->t_state = now;
+            key_evq_push(k->map, 1);
+        }
+        break;
+
+    default:
+        k->state = KS_IDLE;
+        break;
+    }
+}
+
+static void menu_port_keys_init(void)
+{
+    uint8_t i;
+
+    for (i = 0; i < 4u; i++)
+    {
+        gpio_init(s_keys[i].pin, GPI, GPIO_HIGH, GPI_PULL_UP);
+        s_keys[i].state = KS_IDLE;
+        s_keys[i].t_state = 0;
+    }
+
+    s_evq_head = 0;
+    s_evq_tail = 0;
+    s_tick_ms = 0;
+    pit_ms_init(CCU60_CH0, KEY_SCAN_MS);
+}
+
+void menu_port_key_tick(void)
+{
+    uint8_t i;
+
+    s_tick_ms += (uint32)KEY_SCAN_MS;
+    for (i = 0; i < 4u; i++)
+    {
+        key_fsm_tick_one(&s_keys[i]);
+    }
+}
+
+uint32_t menu_port_millis(void)
+{
+    return (uint32_t)s_tick_ms;
 }
 
 void menu_port_init(void)
 {
+    static uint8_t keys_ready = 0;
+
     ips200_set_dir(IPS200_PORTAIT);
     ips200_init(IPS200_CONNECT_TYPE);
     ips200_set_font(IPS200_8X16_FONT);
     ips200_clear();
+
+    if (!keys_ready)
+    {
+        menu_port_keys_init();
+        keys_ready = 1;
+    }
 }
 
 void menu_port_key_scan(void)
 {
-    key_scanner();
+    /* 扫描在 CCU60_CH0 PIT ISR 中完成；此处保留 API 兼容 */
 }
-
-// Display -- 2-inch colour IPS200.  Character coordinates (col, row) are converted to pixel coordinates.
-//   col → x = col * 8      (8x16 font, 8 pixels per character wide)
-//   row → y = row * 16     (16 pixels per character tall)
-//
-//  Style mapping (colour LCD -- no monochrome inverted background):
-//    NORMAL   : plain text
-//    SELECTED : plain text, but the engine's label already includes ">" at col 0 for cursor indication
-//    EDIT     : same as SELECTED; the engine draws the title bar with "[E]" prefix
-//    TITLE    : same as NORMAL; the engine decorates the title (e.g. "== NAME ==")
-//
-//  The engine's build_label() and draw_title*() functions handle all visual distinction. The port
-//  layer simply draws the text as given at the requested position.
 
 void menu_port_clear(void)
 {
@@ -45,14 +177,12 @@ void menu_port_clear(void)
 
 void menu_port_draw_text(uint8_t col, uint8_t row, const char *s, menu_style_e style)
 {
-    (void)style;   // colour: style differences are handled at the engine level (label markup)
+    (void)style;
     ips200_show_string((uint16)(col * 8), (uint16)(row * 16), s);
 }
 
 void menu_port_draw_int(uint8_t col, uint8_t row, int32_t v, uint8_t width, menu_style_e style)
 {
-    // ips200_show_int draws num + 1 columns (extra slot for sign), so to fill exactly
-    // `width` columns pass num = width - 1.
     uint8_t num = (width > 1) ? (uint8_t)(width - 1) : 1;
     if (num > 10) num = 10;
     (void)style;
@@ -74,39 +204,21 @@ void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint
 
 // Input
 //   KEY_1=UP  KEY_2=DOWN  KEY_3=ENTER  KEY_4=BACK
-//   ENTER/BACK act on a short press only. UP/DOWN: short press = one 1x event; a held key produces throttled
-//   repeat events (is_repeat=1 -> engine applies 10x step). The library latches KEY_LONG_PRESS while held.
+//   5ms PIT 状态机：消抖后立刻触发；UP/DOWN 长按连发（is_repeat=1 -> 10x 步进）。
 void menu_port_scan_keys(menu_key_event_t *ev)
 {
-    static uint32 last_repeat_ms = 0;
-    key_state_enum up, down;
-
     ev->key = MENU_KEY_NONE;
     ev->is_repeat = 0;
 
-    if (key_get_state(KEY_3) == KEY_SHORT_PRESS) { key_clear_state(KEY_3); ev->key = MENU_KEY_ENTER; return; }
-    if (key_get_state(KEY_4) == KEY_SHORT_PRESS) { key_clear_state(KEY_4); ev->key = MENU_KEY_BACK;  return; }
-
-    up   = key_get_state(KEY_1);
-    down = key_get_state(KEY_2);
-
-    if (up   == KEY_SHORT_PRESS) { key_clear_state(KEY_1); ev->key = MENU_KEY_UP;   return; }
-    if (down == KEY_SHORT_PRESS) { key_clear_state(KEY_2); ev->key = MENU_KEY_DOWN; return; }
-
-    if (up == KEY_LONG_PRESS || down == KEY_LONG_PRESS)
+    if (s_evq_head == s_evq_tail)
     {
-        uint32 now = menu_port_millis();
-        if ((uint32)(now - last_repeat_ms) >= KEY_REPEAT_MS)     // throttle held-key repeats
-        {
-            last_repeat_ms = now;
-            ev->key = (up == KEY_LONG_PRESS) ? MENU_KEY_UP : MENU_KEY_DOWN;
-            ev->is_repeat = 1;
-        }
-        // do NOT clear the long-press state: it auto-latches while held; releasing resets it in the driver.
+        return;
     }
+
+    *ev = s_evq[s_evq_head];
+    s_evq_head = (uint8_t)((s_evq_head + 1u) % KEY_EVQ_LEN);
 }
 
-// Flash  (fixed DFLASH page ; data is an array of 32-bit words, stored via the union buffer)
 uint8_t menu_port_flash_write(const uint32_t *buf, uint16_t count)
 {
     uint16_t i;
@@ -116,7 +228,7 @@ uint8_t menu_port_flash_write(const uint32_t *buf, uint16_t count)
     for (i = 0; i < count; i++)
         flash_union_buffer[i].uint32_type = (uint32)buf[i];
 
-    flash_erase_page(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);           // erase before write (required)
+    flash_erase_page(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);
     return (uint8_t)flash_write_page_from_buffer(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);
 }
 

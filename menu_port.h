@@ -37,8 +37,9 @@ typedef struct
 void     menu_port_init(void);          // display + font
 uint32_t menu_port_millis(void);        // free-running millisecond counter
 
-// Call this every frame to scan keys (reuses the existing key_scanner from motor_hw_init).
+// Legacy hook: key scan runs in CCU60_CH0 PIT ISR (menu_port_key_tick). Safe to call every frame.
 void     menu_port_key_scan(void);
+void     menu_port_key_tick(void);      // call from cc60_pit_ch0_isr only
 
 //--------------------------------------------------------------------------------------------------------------------
 // Display primitives -- (col,row) are character cells. Numbers are drawn with the SeekFree ips200 show

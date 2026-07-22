@@ -2,14 +2,15 @@
 
 #include "isr_config.h"
 #include "isr.h"
+#include "menu_port.h"
 
 // TC default: no nest; call interrupt_global_enable(0) inside ISR to allow nesting
 
 IFX_INTERRUPT(cc60_pit_ch0_isr, 0, CCU6_0_CH0_ISR_PRIORITY)
 {
     interrupt_global_enable(0);
+    menu_port_key_tick();
     pit_clear_flag(CCU60_CH0);
-
 }
 
 IFX_INTERRUPT(cc60_pit_ch1_isr, 0, CCU6_0_CH1_ISR_PRIORITY)
