@@ -50,6 +50,12 @@ void motor_stop(void)
     pwm_set_duty(PIN_MOTOR_RIGHT_IN2, 0U);
 }
 
+void motor_reset(void)
+{
+    motor_stop();
+    pwm_set_duty(PIN_SERVO_PWM, SERVO_CENTER);
+}
+
 uint32_t hal_time_us(void)
 {
     return (uint32_t)system_getval_us();

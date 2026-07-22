@@ -9,6 +9,9 @@ volatile float   steer_kp_max       = KP_MAX;
 volatile float   steer_kp_e_sat     = KP_E_SAT;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
+volatile uint8_t  drive_armed       = 0;
+volatile uint16_t drive_duty_base   = STRAIGHT_DUTY;
+volatile uint16_t control_duty_prev = 0;
 
 static int16_t  g_prev_error;
 static float    g_d_filt;
@@ -41,6 +44,12 @@ void control_init(void)
     g_d_filt     = 0.0f;
     g_duty_now   = 0;
     g_servo_now  = SERVO_CENTER;
+}
+
+void control_reset(void)
+{
+    control_init();
+    control_duty_prev = 0;
 }
 
 void control_update(const track_info_t *ti, control_out_t *out)
@@ -87,7 +96,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     int32_t cap_steer_i = (int32_t)DUTY_HARD_CAP - (steer_off * STEER_DUTY_SLOPE_NUM) / STEER_DUTY_SLOPE_DEN;
     uint16_t cap_steer = (cap_steer_i < MIN_TURN_DUTY) ? MIN_TURN_DUTY : (uint16_t)cap_steer_i;
 
-    uint16_t target = STRAIGHT_DUTY;
+    uint16_t target = drive_duty_base;
     if (cap_rows  < target) target = cap_rows;
     if (cap_curv  < target) target = cap_curv;
     if (cap_steer < target) target = cap_steer;

@@ -1,6 +1,8 @@
 /* menu.c - data-driven tune menu engine */
 #include "menu.h"
 #include "menu_port.h"
+#include "control.h"
+#include "motor.h"
 
 #define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
@@ -11,6 +13,7 @@
 typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
 
 static nav_state_e       s_nav;
+static uint8_t           s_camera_view;
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
 static float             s_edit_val;            // 编辑工作副本
@@ -274,6 +277,23 @@ void menu_action_defaults(void)
     redraw_visible_values();
 }
 
+void menu_action_camera(void)
+{
+    s_camera_view = 1;
+}
+
+void menu_action_reset(void)
+{
+    control_reset();
+    motor_reset();
+    draw_title("Reset");
+}
+
+uint8_t menu_camera_view(void)
+{
+    return s_camera_view;
+}
+
 void menu_init(void)
 {
     menu_port_init();
@@ -289,6 +309,16 @@ void menu_task(void)
     menu_key_event_t ev;
     menu_port_key_scan();
     menu_port_scan_keys(&ev);
+
+    if (s_camera_view)
+    {
+        if (ev.key == MENU_KEY_BACK)
+        {
+            s_camera_view = 0;
+            draw_list_full();
+        }
+        return;
+    }
 
     if (s_nav == NAV_LIST)
     {

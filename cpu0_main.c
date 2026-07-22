@@ -9,7 +9,6 @@
 
 #pragma section all "cpu0_dsram"
 
-static uint16_t g_duty_prev;
 static track_info_t g_track;
 
 int core0_main(void) {
@@ -20,7 +19,6 @@ int core0_main(void) {
   menu_port_init();
   control_init();
   menu_init();
-  g_duty_prev = 0;
 
   mt9v03x_init();
   cpu_wait_event_ready();
@@ -35,7 +33,7 @@ int core0_main(void) {
       continue;
     }
 
-    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, g_duty_prev,
+    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, control_duty_prev,
                   &g_track);
 
     {
@@ -63,16 +61,22 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (drive_en) {
+    if (drive_en && drive_armed) {
       motor_apply(out.servo_pwm, out.duty);
-      g_duty_prev = out.duty;
+      control_duty_prev = out.duty;
     } else {
-      motor_stop();
-      g_duty_prev = 0;
-      control_init();
+      motor_reset();
+      control_duty_prev = 0;
+      if (!drive_en) {
+        control_init();
+      }
     }
 
     menu_task();
+    if (menu_camera_view())
+    {
+      ips200_displayimage03x((const uint8 *)mt9v03x_image, IMG_W, IMG_H);
+    }
     mt9v03x_finish_flag = 0;
   }
 }
