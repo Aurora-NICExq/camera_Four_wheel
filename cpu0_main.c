@@ -27,7 +27,9 @@ int core0_main(void) {
 
   uint16_t fail_cnt = 0;
   uint8_t severe_fail_cnt = 0;
-  uint16_t armed_run_frames = 0;
+  uint8_t armed_prev = 0;
+  uint8_t armed_timed_out = 0;
+  uint32_t armed_start_us = 0;
   uint8_t drive_en = 1;
   control_out_t out = {0};
 
@@ -73,17 +75,20 @@ int core0_main(void) {
     control_update(&g_track, &out);
 
     if (drive_armed) {
-      if (armed_run_frames < DRIVE_ARMED_TIMEOUT_FRAMES) {
-        armed_run_frames++;
-      } else {
-        drive_armed = 0;
-        armed_run_frames = 0;
+      if (!armed_prev) {
+        armed_start_us = hal_time_us();
+        armed_timed_out = 0;
+      }
+      if (!armed_timed_out &&
+          (uint32_t)(hal_time_us() - armed_start_us) >= DRIVE_ARMED_TIMEOUT_US) {
+        armed_timed_out = 1;
       }
     } else {
-      armed_run_frames = 0;
+      armed_timed_out = 0;
     }
+    armed_prev = drive_armed;
 
-    if (drive_en && drive_armed && battery_ok()) {
+    if (drive_en && drive_armed && !armed_timed_out && battery_ok()) {
       motor_apply(out.servo_pwm, out.duty);
       control_duty_prev = out.duty;
     } else {

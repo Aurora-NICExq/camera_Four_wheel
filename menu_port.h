@@ -59,10 +59,4 @@ void menu_port_scan_keys(menu_key_event_t *ev);
 void menu_port_draw_key_status(void);
 uint8_t menu_port_key_pressed(menu_key_e key);
 
-//--------------------------------------------------------------------------------------------------------------------
-// Flash : one fixed page (matches the official SeekFree EEPROM demo). Data is an array of 32-bit words.
-//--------------------------------------------------------------------------------------------------------------------
-uint8_t menu_port_flash_write(const uint32_t *buf, uint16_t count);   // erase+write; returns 1 on success
-void    menu_port_flash_read (uint32_t *buf, uint16_t count);         // read `count` words into buf
-
 #endif

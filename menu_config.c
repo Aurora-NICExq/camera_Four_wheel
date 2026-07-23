@@ -22,8 +22,6 @@ const menu_item_t menu_items[] = {
     MENU_U16("Duty",        drive_duty_base,    0,    DUTY_HARD_CAP, 100, STRAIGHT_DUTY),
     MENU_ACTION("Reset",        menu_action_reset),
     MENU_ACTION("Camera",       menu_action_camera),
-    MENU_ACTION("Save",         menu_action_save),
-    MENU_ACTION("Load",         menu_action_load),
     MENU_ACTION("Restore Def",  menu_action_defaults),
 };
 const uint16_t menu_item_count = (uint16_t)(sizeof(menu_items) / sizeof(menu_items[0]));

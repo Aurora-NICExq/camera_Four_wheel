@@ -4,9 +4,6 @@
 #include "config.h"
 #include "menu_port.h"
 
-#define MENU_FLASH_SECTOR    (0)
-#define MENU_FLASH_PAGE      (8)
-
 /* ---- 按键输入：逐飞主板四个独立按键 KEY1~KEY4（上拉输入，按下为低） --------------------
  * 扫描/消抖/事件模型移植自另一块板（五向摇杆）实测可用的工程：
  *   - 每 KEY_SCAN_PERIOD_MS 采样一次；
@@ -262,27 +259,4 @@ void menu_port_draw_key_status(void)
     }
 
     menu_port_draw_text(0, (uint8_t)(MENU_ROWS - 1), line, MENU_STYLE_NORMAL);
-}
-
-uint8_t menu_port_flash_write(const uint32_t *buf, uint16_t count)
-{
-    uint16_t i;
-    if (count > EEPROM_PAGE_LENGTH) return 0;
-
-    flash_buffer_clear();
-    for (i = 0; i < count; i++)
-        flash_union_buffer[i].uint32_type = (uint32)buf[i];
-
-    flash_erase_page(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);
-    return (uint8_t)flash_write_page_from_buffer(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);
-}
-
-void menu_port_flash_read(uint32_t *buf, uint16_t count)
-{
-    uint16_t i;
-    if (count > EEPROM_PAGE_LENGTH) count = EEPROM_PAGE_LENGTH;
-
-    flash_read_page_to_buffer(MENU_FLASH_SECTOR, MENU_FLASH_PAGE);
-    for (i = 0; i < count; i++)
-        buf[i] = (uint32_t)flash_union_buffer[i].uint32_type;
 }

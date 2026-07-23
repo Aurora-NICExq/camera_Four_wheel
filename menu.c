@@ -7,7 +7,6 @@
 #define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
 #define VALUE_WIDTH   (MENU_COLS - VALUE_COL)
-#define FLASH_MAX_WORDS (64)
 #define KEY_STEP_MULT (10.0f)                   // 长按自动重复步长倍率
 
 typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
@@ -18,7 +17,6 @@ static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
 static float             s_edit_val;            // 编辑工作副本
 static const menu_item_t *s_edit_item;
-static uint32_t          s_flash_buf[FLASH_MAX_WORDS];
 
 static int32_t round_f(float v) { return (int32_t)(v >= 0.0f ? v + 0.5f : v - 0.5f); }
 
@@ -182,92 +180,11 @@ static void edit_end(bool commit)
     draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, false);
 }
 
-// Flash 存取（表驱动 magic + version + count + checksum）
-static uint16_t savable_count(void)
-{
-    uint16_t i, c = 0;
-    for (i = 0; i < menu_item_count; i++) if (menu_items[i].type != ITEM_ACTION) c++;
-    return c;
-}
-
-static uint32_t float_bits(float f) { union { float f; uint32_t u; } x; x.f = f; return x.u; }
-static float    bits_float(uint32_t u) { union { float f; uint32_t u; } x; x.u = u; return x.f; }
-
-static uint32_t item_to_word(const menu_item_t *it)
-{
-    switch (it->type)
-    {
-    case ITEM_FLOAT:  return float_bits(*(volatile float *)it->var);
-    case ITEM_INT16:  return (uint32_t)(int32_t)(*(volatile int16_t *)it->var);
-    case ITEM_UINT16: return (uint32_t)(*(volatile uint16_t *)it->var);
-    case ITEM_BOOL:   return (*(volatile uint8_t *)it->var) ? 1u : 0u;
-    default:          return 0u;
-    }
-}
-
-static void word_to_item(const menu_item_t *it, uint32_t w)
-{
-    switch (it->type)
-    {
-    case ITEM_FLOAT:  *(volatile float    *)it->var = bits_float(w);        break;
-    case ITEM_INT16:  *(volatile int16_t  *)it->var = (int16_t)(int32_t)w;  break;
-    case ITEM_UINT16: *(volatile uint16_t *)it->var = (uint16_t)w;          break;
-    case ITEM_BOOL:   *(volatile uint8_t  *)it->var = w ? 1u : 0u;          break;
-    default: break;
-    }
-}
-
 static void apply_defaults(void)
 {
     uint16_t i;
     for (i = 0; i < menu_item_count; i++)
         if (menu_items[i].type != ITEM_ACTION) item_set(&menu_items[i], menu_items[i].def);
-}
-
-static bool load_from_flash(void)
-{
-    uint16_t n = savable_count();
-    uint16_t total = (uint16_t)(n + 4);           // magic + version + count + params + checksum
-    uint16_t i, k;
-    uint32_t sum = 0;
-    if (total > FLASH_MAX_WORDS) return false;
-
-    menu_port_flash_read(s_flash_buf, total);
-    if (s_flash_buf[0] != MENU_FLASH_MAGIC)   return false;
-    if (s_flash_buf[1] != MENU_FLASH_VERSION) return false;
-    if (s_flash_buf[2] != n)                  return false;
-    for (i = 0; i < (uint16_t)(total - 1); i++) sum += s_flash_buf[i];
-    if (sum != s_flash_buf[total - 1])        return false;
-
-    k = 3;
-    for (i = 0; i < menu_item_count; i++)
-        if (menu_items[i].type != ITEM_ACTION) word_to_item(&menu_items[i], s_flash_buf[k++]);
-    return true;
-}
-
-void menu_action_save(void)
-{
-    uint16_t n = savable_count();
-    uint16_t i, k;
-    uint32_t sum = 0;
-    if ((uint16_t)(n + 4) > FLASH_MAX_WORDS) { draw_title("Too Many"); return; }
-
-    s_flash_buf[0] = MENU_FLASH_MAGIC;
-    s_flash_buf[1] = MENU_FLASH_VERSION;
-    s_flash_buf[2] = n;
-    k = 3;
-    for (i = 0; i < menu_item_count; i++)
-        if (menu_items[i].type != ITEM_ACTION) s_flash_buf[k++] = item_to_word(&menu_items[i]);
-    for (i = 0; i < k; i++) sum += s_flash_buf[i];
-    s_flash_buf[k++] = sum;
-
-    draw_title(menu_port_flash_write(s_flash_buf, k) ? "Saved" : "Save ERR");
-}
-
-void menu_action_load(void)
-{
-    draw_title(load_from_flash() ? "Loaded" : "No Data");
-    redraw_visible_values();
 }
 
 void menu_action_defaults(void)
@@ -297,7 +214,8 @@ uint8_t menu_camera_view(void)
 void menu_init(void)
 {
     menu_port_init();
-    if (!load_from_flash()) apply_defaults();   // 有效记录则用之，否则用表内默认
+    apply_defaults();
+    drive_armed = 0;
     s_nav = NAV_LIST;
     s_cursor = 0;
     s_top = 0;

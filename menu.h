@@ -34,14 +34,9 @@ typedef struct
 extern const menu_item_t menu_items[];
 extern const uint16_t    menu_item_count;
 
-#define MENU_FLASH_MAGIC     (0x4D4E5531u)   /* 'MNU1' */
-#define MENU_FLASH_VERSION   (3u)
-
-void menu_init(void);   // CPU0 上调一次：显示 + 按键 + 载入 Flash 或默认
+void menu_init(void);   // CPU0 上调一次：显示 + 按键 + 默认参数
 void menu_task(void);   // 主循环每帧调用；非阻塞
 
-void menu_action_save(void);
-void menu_action_load(void);
 void menu_action_defaults(void);
 void menu_action_camera(void);
 void menu_action_reset(void);
