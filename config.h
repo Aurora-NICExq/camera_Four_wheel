@@ -62,7 +62,7 @@
 
 #define CURV_DUTY_TABLE_LEN (4)
 #define CURV_DUTY_TABLE_CURV {40, 90, 160, 260}
-#define CURV_DUTY_TABLE_DUTY {6000, 3800, 3200, 2600}
+#define CURV_DUTY_TABLE_DUTY {3000, 2600, 2200, 2000} /* 按 ~30% 基准分层：直道/轻弯/中弯/急弯 */
 
 #define STEER_DUTY_SLOPE_NUM (18)
 #define STEER_DUTY_SLOPE_DEN (1)
