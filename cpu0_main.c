@@ -1,5 +1,6 @@
 /* cpu0_main.c */
 #include "config.h"
+#include "battery.h"
 #include "control.h"
 #include "image.h"
 #include "menu.h"
@@ -16,6 +17,7 @@ int core0_main(void) {
   debug_init();
 
   motor_hw_init();
+  battery_init();
   menu_port_init();
   control_init();
   menu_init();
@@ -30,6 +32,12 @@ int core0_main(void) {
 
   while (TRUE) {
     menu_task();
+    battery_update();
+
+    if (!battery_ok()) {
+      motor_reset();
+      control_duty_prev = 0;
+    }
 
     if (!mt9v03x_finish_flag) {
       continue;
@@ -63,13 +71,13 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (drive_en && drive_armed) {
+    if (drive_en && drive_armed && battery_ok()) {
       motor_apply(out.servo_pwm, out.duty);
       control_duty_prev = out.duty;
     } else {
       motor_reset();
       control_duty_prev = 0;
-      if (!drive_en) {
+      if (!drive_en || !battery_ok()) {
         control_init();
       } else {
         control_duty_reset();
