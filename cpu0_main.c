@@ -27,6 +27,7 @@ int core0_main(void) {
 
   uint16_t fail_cnt = 0;
   uint8_t severe_fail_cnt = 0;
+  uint16_t armed_run_frames = 0;
   uint8_t drive_en = 1;
   control_out_t out = {0};
 
@@ -70,6 +71,17 @@ int core0_main(void) {
     }
 
     control_update(&g_track, &out);
+
+    if (drive_armed) {
+      if (armed_run_frames < DRIVE_ARMED_TIMEOUT_FRAMES) {
+        armed_run_frames++;
+      } else {
+        drive_armed = 0;
+        armed_run_frames = 0;
+      }
+    } else {
+      armed_run_frames = 0;
+    }
 
     if (drive_en && drive_armed && battery_ok()) {
       motor_apply(out.servo_pwm, out.duty);
