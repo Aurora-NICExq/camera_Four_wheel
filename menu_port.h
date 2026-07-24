@@ -55,8 +55,4 @@ void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint
 //--------------------------------------------------------------------------------------------------------------------
 void menu_port_scan_keys(menu_key_event_t *ev);
 
-/* 按键调试行（test/menu-keys）：显示最近事件与各键稳定态 */
-void menu_port_draw_key_status(void);
-uint8_t menu_port_key_pressed(menu_key_e key);
-
 #endif

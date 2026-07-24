@@ -7,6 +7,5 @@
 void     battery_init(void);
 void     battery_update(void);
 uint8_t  battery_ok(void);
-uint16_t battery_voltage_mv(void);
 
 #endif /* BATTERY_H */

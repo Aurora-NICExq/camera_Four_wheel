@@ -11,8 +11,4 @@ void motor_stop(void);
 void motor_reset(void);
 void motor_apply(uint16_t servo_pwm, uint16_t duty);
 
-uint32_t hal_time_us(void);
-void hal_buzzer_on(void);
-void hal_buzzer_off(void);
-
 #endif

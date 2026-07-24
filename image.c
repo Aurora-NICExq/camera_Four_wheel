@@ -29,13 +29,6 @@ static int my_abs(int v)
     return (v >= 0) ? v : -v;
 }
 
-static int16_t limit_a_b(int16_t x, int16_t a, int16_t b)
-{
-    if (x < a) return a;
-    if (x > b) return b;
-    return x;
-}
-
 static uint8_t clamp_u8(int32_t v, int32_t lo, int32_t hi)
 {
     if (v < lo) return (uint8_t)lo;

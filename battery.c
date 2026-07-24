@@ -6,7 +6,6 @@
 
 static uint8_t  s_battery_ok = 1;
 static uint8_t  s_low_cnt;
-static uint16_t s_voltage_mv;
 static uint16_t s_check_cnt;
 
 static uint16_t battery_adc_to_mv(uint16_t adc)
@@ -24,7 +23,6 @@ void battery_init(void)
     adc_init(PIN_BATTERY_ADC, BATTERY_ADC_RESOLUTION);
     s_battery_ok = 1;
     s_low_cnt = 0;
-    s_voltage_mv = 0;
     s_check_cnt = 0;
 }
 
@@ -42,7 +40,6 @@ void battery_update(void)
 
     raw = adc_mean_filter_convert(PIN_BATTERY_ADC, BATTERY_ADC_SAMPLES);
     mv = battery_adc_to_mv(raw);
-    s_voltage_mv = mv;
 
     if (!s_battery_ok)
     {
@@ -69,9 +66,4 @@ void battery_update(void)
 uint8_t battery_ok(void)
 {
     return s_battery_ok;
-}
-
-uint16_t battery_voltage_mv(void)
-{
-    return s_voltage_mv;
 }
