@@ -215,7 +215,6 @@ void menu_init(void)
 {
     menu_port_init();
     apply_defaults();
-    drive_armed = 0;
     s_nav = NAV_LIST;
     s_cursor = 0;
     s_top = 0;
