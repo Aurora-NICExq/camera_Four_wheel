@@ -8,9 +8,11 @@ extern volatile float   steer_kp_e_sat;
 extern volatile float   steer_kd;
 extern volatile float   steer_d_filt_alpha;
 extern volatile int16_t image_threshold;
+extern volatile uint8_t  drive_armed;
 extern volatile uint16_t drive_duty_base;
 
 const menu_item_t menu_items[] = {
+    MENU_BOOL("Armed",      drive_armed,        0),
     MENU_F32("Kp Min",       steer_kp_min,       0.0f, 20.0f, 0.1f,  KP_MIN),
     MENU_F32("Kp Max",       steer_kp_max,       0.0f, 20.0f, 0.1f,  KP_MAX),
     MENU_F32("Kp E Sat",     steer_kp_e_sat,     5.0f, 80.0f, 1.0f,  KP_E_SAT),

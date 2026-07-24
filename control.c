@@ -9,6 +9,7 @@ volatile float   steer_kp_max       = KP_MAX;
 volatile float   steer_kp_e_sat     = KP_E_SAT;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
+volatile uint8_t  drive_armed       = 0;
 volatile uint16_t drive_duty_base   = STRAIGHT_DUTY;
 volatile uint16_t control_duty_prev = 0;
 

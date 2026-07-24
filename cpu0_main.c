@@ -71,7 +71,7 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (drive_en && battery_ok()) {
+    if (drive_en && drive_armed && battery_ok()) {
       motor_apply(out.servo_pwm, out.duty);
       control_duty_prev = out.duty;
     } else {

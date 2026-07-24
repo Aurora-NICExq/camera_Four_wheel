@@ -14,6 +14,7 @@ typedef struct
     uint16_t duty_target;
 } control_out_t;
 
+extern volatile uint8_t  drive_armed;
 extern volatile uint16_t drive_duty_base;
 extern volatile uint16_t control_duty_prev;
 
