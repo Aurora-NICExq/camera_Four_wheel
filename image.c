@@ -1,4 +1,4 @@
-/* image.c - 八邻域双边巡线 + 十字补线 */
+/* image.c - 八邻域双边巡线 */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -23,9 +23,6 @@ static uint8_t  start_point_r[2];
 static uint16_t data_stastics_l;
 static uint16_t data_stastics_r;
 static uint8_t  hightest_row;
-static uint8_t  cross_break_l;
-static uint8_t  cross_break_r;
-static uint8_t  cross_flag;
 
 static int my_abs(int v)
 {
@@ -44,19 +41,6 @@ static uint8_t clamp_u8(int32_t v, int32_t lo, int32_t hi)
     if (v < lo) return (uint8_t)lo;
     if (v > hi) return (uint8_t)hi;
     return (uint8_t)v;
-}
-
-static void init_cross_meta(track_info_t *ti)
-{
-    uint8_t r;
-    ti->cross_valid = 0;
-    ti->cross_lo = 0;
-    ti->cross_hi = 0;
-    ti->inflect_row = 0xFF;
-    for (r = 0; r < IMG_H; r++)
-    {
-        ti->cross_filled[r] = 0;
-    }
 }
 
 static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W])
@@ -415,174 +399,6 @@ static void get_right(uint16_t total_r)
     }
 }
 
-static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
-{
-    float xsum = 0.0f;
-    float ysum = 0.0f;
-    float xysum = 0.0f;
-    float x2sum = 0.0f;
-    int16_t i;
-    float result = 0.0f;
-    static float result_last;
-
-    for (i = (int16_t)begin; i < (int16_t)end; i++)
-    {
-        xsum  += (float)i;
-        ysum  += (float)border[i];
-        xysum += (float)i * (float)border[i];
-        x2sum += (float)i * (float)i;
-    }
-
-    {
-        float denom = ((float)(end - begin) * x2sum - xsum * xsum);
-        if (denom != 0.0f)
-        {
-            result = (((float)(end - begin) * xysum - xsum * ysum) / denom);
-            result_last = result;
-        }
-        else
-        {
-            result = result_last;
-        }
-    }
-    return result;
-}
-
-static void calculate_s_i(uint8_t start, uint8_t end, const uint8_t *border,
-                          float *slope_rate, float *intercept)
-{
-    uint16_t i;
-    uint16_t num = 0;
-    float x_average;
-    float y_average;
-    uint32_t xsum = 0;
-    uint32_t ysum = 0;
-
-    for (i = start; i < end; i++)
-    {
-        xsum += i;
-        ysum += border[i];
-        num++;
-    }
-
-    if (num)
-    {
-        x_average = (float)xsum / (float)num;
-        y_average = (float)ysum / (float)num;
-    }
-    else
-    {
-        x_average = 0.0f;
-        y_average = 0.0f;
-    }
-
-    *slope_rate = slope_calculate(start, end, border);
-    *intercept = y_average - (*slope_rate) * x_average;
-}
-
-static void mark_cross_fill_rows(uint8_t y_lo, uint8_t y_hi, track_info_t *ti)
-{
-    uint8_t a1 = y_lo;
-    uint8_t a2 = y_hi;
-    uint8_t i;
-
-    if (a1 > a2)
-    {
-        uint8_t t = a1;
-        a1 = a2;
-        a2 = t;
-    }
-
-    for (i = a1; i <= a2; i++)
-    {
-        uint8_t tr = TR_ROW(i);
-        if (tr < IMG_H)
-        {
-            ti->cross_filled[tr] = 1;
-        }
-    }
-
-    if (ti->cross_lo == 0 && ti->cross_hi == 0)
-    {
-        ti->cross_lo = TR_ROW(a2);
-        ti->cross_hi = (uint8_t)(TR_ROW(a1) + 1u);
-    }
-}
-
-static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti)
-{
-    uint16_t i;
-    uint8_t start;
-    uint8_t end;
-    float slope_rate = 0.0f;
-    float intercept = 0.0f;
-    uint8_t fill_from;
-
-    cross_break_l = 0;
-    cross_break_r = 0;
-    cross_flag = 0;
-
-    for (i = 1; i + 7u < data_stastics_l; i++)
-    {
-        if (dir_l[i - 1] == 4 && dir_l[i] == 4 &&
-            dir_l[i + 3] == 6 && dir_l[i + 5] == 6 && dir_l[i + 7] == 6)
-        {
-            cross_break_l = (uint8_t)points_l[i][1];
-            break;
-        }
-    }
-
-    for (i = 1; i + 7u < data_stastics_r; i++)
-    {
-        if (dir_r[i - 1] == 4 && dir_r[i] == 4 &&
-            dir_r[i + 3] == 6 && dir_r[i + 5] == 6 && dir_r[i + 7] == 6)
-        {
-            cross_break_r = (uint8_t)points_r[i][1];
-            break;
-        }
-    }
-
-    if (!cross_break_l || !cross_break_r)
-    {
-        return;
-    }
-
-    if (!bin[IMG_H - 1][EIGHTN_CROSS_CORNER_L] ||
-        !bin[IMG_H - 1][EIGHTN_CROSS_CORNER_R])
-    {
-        return;
-    }
-
-    cross_flag = 1;
-    fill_from = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
-
-    start = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_BACK);
-    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
-    end = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
-    calculate_s_i(start, end, l_border, &slope_rate, &intercept);
-    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
-    {
-        int16_t v = (int16_t)(slope_rate * (float)i + intercept);
-        l_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
-    }
-
-    start = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_BACK);
-    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
-    end = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
-    calculate_s_i(start, end, r_border, &slope_rate, &intercept);
-    fill_from = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
-    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
-    {
-        int16_t v = (int16_t)(slope_rate * (float)i + intercept);
-        r_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
-    }
-
-    ti->cross_valid = 1;
-    ti->inflect_row = TR_ROW(cross_break_l);
-}
-
 static void export_track(track_info_t *ti, uint8_t hightest)
 {
     uint8_t ir;
@@ -646,11 +462,7 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         int32_t w = (int32_t)w_low[band] * (int32_t)(256u - k)
                   + (int32_t)w_high[band] * (int32_t)k;
 
-        if (ti->cross_filled[r])
-        {
-            w = (w * STEER_W_CROSS_FILL_PCT) / 100;
-        }
-        else if (ti->left_lost[r] && ti->right_lost[r])
+        if (ti->left_lost[r] && ti->right_lost[r])
         {
             w = (w * STEER_W_BOTH_LOST_PCT) / 100;
         }
@@ -665,28 +477,10 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     return (int16_t)(acc / w_sum);
 }
 
-static int16_t segment_slope_q8(const track_info_t *ti, uint8_t lo, uint8_t hi, uint8_t *ok)
-{
-    *ok = 0;
-    if (hi >= ti->valid_rows) hi = (uint8_t)(ti->valid_rows - 1u);
-    while (lo < hi && ti->left_lost[lo] && ti->right_lost[lo]) lo++;
-    while (hi > lo && ti->left_lost[hi] && ti->right_lost[hi]) hi--;
-    if (hi <= lo || (uint8_t)(hi - lo) < CURV_MIN_SPAN_ROWS ||
-        (ti->left_lost[lo] && ti->right_lost[lo]))
-    {
-        return 0;
-    }
-    *ok = 1;
-    return (int16_t)((((int32_t)ti->mid[hi] - (int32_t)ti->mid[lo]) * 256) /
-                     (int32_t)(hi - lo));
-}
-
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
 {
     uint8_t th;
 
-    init_cross_meta(out);
-    cross_flag = 0;
     hightest_row = 0;
     data_stastics_l = 0;
     data_stastics_r = 0;
@@ -707,25 +501,11 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
                    &hightest_row);
         get_left(data_stastics_l);
         get_right(data_stastics_r);
-        cross_fill(image_bin, out);
         export_track(out, hightest_row);
     }
     else
     {
         export_track(out, EIGHTN_START_ROW + 1u);
-    }
-
-    if (out->valid_rows > CURV_FAR_ROW_LO)
-    {
-        uint8_t near_ok;
-        uint8_t far_ok;
-        int16_t s_near = segment_slope_q8(out, CURV_NEAR_ROW_LO, CURV_NEAR_ROW_HI, &near_ok);
-        int16_t s_far  = segment_slope_q8(out, CURV_FAR_ROW_LO,  CURV_FAR_ROW_HI,  &far_ok);
-        out->curvature = (near_ok && far_ok) ? (int16_t)(s_far - s_near) : 0;
-    }
-    else
-    {
-        out->curvature = 0;
     }
 
     out->error = weighted_error(out, duty_now);

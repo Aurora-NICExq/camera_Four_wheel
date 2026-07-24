@@ -21,13 +21,6 @@
 #define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
 #define STEER_W_SINGLE_EDGE_PCT (50)
 #define STEER_W_BOTH_LOST_PCT (40)
-#define STEER_W_CROSS_FILL_PCT (70)
-
-#define CURV_NEAR_ROW_LO (5)
-#define CURV_NEAR_ROW_HI (25)
-#define CURV_FAR_ROW_LO (45)
-#define CURV_FAR_ROW_HI (70)
-#define CURV_MIN_SPAN_ROWS (6)
 
 #define EIGHTN_START_ROW (IMG_H - 2)
 #define EIGHTN_BORDER_MIN (1)
@@ -35,10 +28,6 @@
 #define EIGHTN_MAX_POINTS (IMG_H * 3)
 #define EIGHTN_FILTER_SUM_MAX (255 * 5)
 #define EIGHTN_FILTER_SUM_MIN (255 * 2)
-#define EIGHTN_CROSS_SLOPE_BACK (15)
-#define EIGHTN_CROSS_SLOPE_NEAR (5)
-#define EIGHTN_CROSS_CORNER_L (4)
-#define EIGHTN_CROSS_CORNER_R (IMG_W - 4)
 #define EIGHTN_MEET_DIST (2)
 
 #define SERVO_PWM_HZ (50)
@@ -54,20 +43,9 @@
 #define KD (6.0f)
 #define D_FILT_ALPHA (0.4f)
 
-#define STRAIGHT_DUTY (2000) /* 直道 20%（满量程 10000） */
+#define STRAIGHT_DUTY (2000) /* 直道/弯道上限 20%（满量程 10000） */
 #define DUTY_HARD_CAP (6000)
-#define MIN_TURN_DUTY (2600)
-
-#define ROWS_DUTY_TABLE_LEN (5)
-#define ROWS_DUTY_TABLE_ROWS {25, 45, 65, 85, 105}
-#define ROWS_DUTY_TABLE_DUTY {2600, 3200, 3800, 4200, 6000}
-
-#define CURV_DUTY_TABLE_LEN (4)
-#define CURV_DUTY_TABLE_CURV {40, 90, 160, 260}
-#define CURV_DUTY_TABLE_DUTY {3000, 2600, 2200, 2000} /* 按 ~30% 基准分层：直道/轻弯/中弯/急弯 */
-
-#define STEER_DUTY_SLOPE_NUM (18)
-#define STEER_DUTY_SLOPE_DEN (1)
+#define STEER_TURN_DUTY_PWM (20) /* 舵角偏离中心超过此值视为转弯，限速 STRAIGHT_DUTY */
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */

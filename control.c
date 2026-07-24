@@ -1,4 +1,4 @@
-/* control.c - steer PD + duty cap */
+/* control.c - steer PD + steer-based duty cap */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -23,19 +23,6 @@ uint16_t control_servo_clamp(int32_t servo_raw)
     if (servo_raw < SERVO_MIN) servo_raw = SERVO_MIN;
     if (servo_raw > SERVO_MAX) servo_raw = SERVO_MAX;
     return (uint16_t)servo_raw;
-}
-
-static uint16_t lut_lookup_ascend(int32_t x, const int16_t *bins, const uint16_t *out, uint8_t len)
-{
-    uint8_t i;
-    for (i = 0; i < len; i++)
-    {
-        if (x < bins[i])
-        {
-            return out[i];
-        }
-    }
-    return out[len - 1u];
 }
 
 void control_init(void)
@@ -86,25 +73,14 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     out->servo_pwm = control_servo_clamp(g_servo_now);
 
-    static const int16_t  rows_bins[ROWS_DUTY_TABLE_LEN] = ROWS_DUTY_TABLE_ROWS;
-    static const uint16_t rows_duty[ROWS_DUTY_TABLE_LEN] = ROWS_DUTY_TABLE_DUTY;
-    static const int16_t  curv_bins[CURV_DUTY_TABLE_LEN] = CURV_DUTY_TABLE_CURV;
-    static const uint16_t curv_duty[CURV_DUTY_TABLE_LEN] = CURV_DUTY_TABLE_DUTY;
-
-    uint16_t cap_rows = lut_lookup_ascend(ti->valid_rows, rows_bins, rows_duty, ROWS_DUTY_TABLE_LEN);
-
-    int16_t curv_abs = (ti->curvature >= 0) ? ti->curvature : (int16_t)(-ti->curvature);
-    uint16_t cap_curv = lut_lookup_ascend(curv_abs, curv_bins, curv_duty, CURV_DUTY_TABLE_LEN);
-
     int32_t steer_off = (int32_t)out->servo_pwm - SERVO_CENTER;
     if (steer_off < 0) steer_off = -steer_off;
-    int32_t cap_steer_i = (int32_t)DUTY_HARD_CAP - (steer_off * STEER_DUTY_SLOPE_NUM) / STEER_DUTY_SLOPE_DEN;
-    uint16_t cap_steer = (cap_steer_i < MIN_TURN_DUTY) ? MIN_TURN_DUTY : (uint16_t)cap_steer_i;
 
     uint16_t target = drive_duty_base;
-    if (cap_rows  < target) target = cap_rows;
-    if (cap_curv  < target) target = cap_curv;
-    if (cap_steer < target) target = cap_steer;
+    if (steer_off >= STEER_TURN_DUTY_PWM && target > STRAIGHT_DUTY)
+    {
+        target = STRAIGHT_DUTY;
+    }
     if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
 
     out->duty_target = target;
