@@ -2,6 +2,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define CAMERA_POWER_ON_DELAY_MS (500) /* 摄像头上电稳定延时，减轻初始化阶段画面撕裂 */
+
 #define IMG_W (188)
 #define IMG_H (120)
 #define IMG_CENTER (94)
@@ -42,6 +44,7 @@
 #define D_FILT_ALPHA (0.4f)
 
 #define STRAIGHT_DUTY (2000) /* 直道/弯道上限 20%（满量程 10000） */
+#define MOTOR_TEST_DUTY (2000) /* 电机测试模式固定占空比 20% */
 #define DUTY_HARD_CAP (6000)
 #define STEER_TURN_DUTY_PWM (20) /* 舵角偏离中心超过此值视为转弯，限速 STRAIGHT_DUTY */
 

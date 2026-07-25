@@ -14,6 +14,7 @@ typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
 static nav_state_e       s_nav;
 static uint8_t           s_camera_view;
 static uint8_t           s_align_test_mode;
+static uint8_t           s_motor_test_mode;
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
 static float             s_edit_val;            // 编辑工作副本
@@ -198,14 +199,28 @@ void menu_action_defaults(void)
 void menu_action_camera(void)
 {
     s_align_test_mode = 0;
+    s_motor_test_mode = 0;
     s_camera_view = 1;
 }
 
 void menu_action_align_test(void)
 {
+    s_motor_test_mode = 0;
     s_align_test_mode = 1;
     s_camera_view = 1;
     motor_stop();
+}
+
+void menu_action_motor_test(void)
+{
+    s_align_test_mode = 0;
+    s_camera_view = 0;
+    s_motor_test_mode = 1;
+    motor_stop();
+    menu_port_clear();
+    draw_title("Motor Test");
+    menu_port_draw_text(0, 2, "Duty: 20%", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 4, "BACK: stop", MENU_STYLE_NORMAL);
 }
 
 void menu_action_reset(void)
@@ -225,6 +240,11 @@ uint8_t menu_align_test_mode(void)
     return s_align_test_mode;
 }
 
+uint8_t menu_motor_test_mode(void)
+{
+    return s_motor_test_mode;
+}
+
 void menu_init(void)
 {
     menu_port_init();
@@ -238,6 +258,17 @@ void menu_init(void)
 
 static void menu_handle_key(const menu_key_event_t *ev)
 {
+    if (s_motor_test_mode)
+    {
+        if (ev->key == MENU_KEY_BACK)
+        {
+            s_motor_test_mode = 0;
+            motor_stop();
+            draw_list_full();
+        }
+        return;
+    }
+
     if (s_camera_view)
     {
         if (ev->key == MENU_KEY_BACK)

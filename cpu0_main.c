@@ -22,6 +22,7 @@ int core0_main(void) {
   control_init();
   menu_init();
 
+  system_delay_ms(CAMERA_POWER_ON_DELAY_MS);
   mt9v03x_init();
   cpu_wait_event_ready();
 
@@ -71,7 +72,14 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (menu_align_test_mode()) {
+    if (menu_motor_test_mode()) {
+      if (battery_ok()) {
+        motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
+      } else {
+        motor_reset();
+      }
+      control_duty_prev = 0;
+    } else if (menu_align_test_mode()) {
       if (battery_ok()) {
         motor_apply_servo_only(out.servo_pwm);
       } else {
