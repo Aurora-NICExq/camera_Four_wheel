@@ -470,6 +470,22 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     return (int16_t)(acc / w_sum);
 }
 
+static int16_t segment_slope_q8(const track_info_t *ti, uint8_t lo, uint8_t hi, uint8_t *ok)
+{
+    *ok = 0;
+    if (hi >= ti->valid_rows) hi = (uint8_t)(ti->valid_rows - 1u);
+    while (lo < hi && ti->left_lost[lo] && ti->right_lost[lo]) lo++;
+    while (hi > lo && ti->left_lost[hi] && ti->right_lost[hi]) hi--;
+    if (hi <= lo || (uint8_t)(hi - lo) < CURV_MIN_SPAN_ROWS ||
+        (ti->left_lost[lo] && ti->right_lost[lo]))
+    {
+        return 0;
+    }
+    *ok = 1;
+    return (int16_t)((((int32_t)ti->mid[hi] - (int32_t)ti->mid[lo]) * 256) /
+                     (int32_t)(hi - lo));
+}
+
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
 {
     uint8_t th;
@@ -499,6 +515,19 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     else
     {
         export_track(out, EIGHTN_START_ROW + 1u);
+    }
+
+    if (out->valid_rows > CURV_FAR_ROW_LO)
+    {
+        uint8_t near_ok;
+        uint8_t far_ok;
+        int16_t s_near = segment_slope_q8(out, CURV_NEAR_ROW_LO, CURV_NEAR_ROW_HI, &near_ok);
+        int16_t s_far  = segment_slope_q8(out, CURV_FAR_ROW_LO,  CURV_FAR_ROW_HI,  &far_ok);
+        out->curvature = (near_ok && far_ok) ? (int16_t)(s_far - s_near) : 0;
+    }
+    else
+    {
+        out->curvature = 0;
     }
 
     out->error = weighted_error(out, duty_now);

@@ -2,7 +2,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define CAMERA_POWER_ON_DELAY_MS (500) /* 摄像头上电稳定延时，减轻初始化阶段画面撕裂 */
+#define CAMERA_POWER_ON_DELAY_MS                                               \
+  (500) /* 摄像头上电稳定延时，减轻初始化阶段画面撕裂 */
 
 #define IMG_W (188)
 #define IMG_H (120)
@@ -21,6 +22,12 @@
 #define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
 #define STEER_W_SINGLE_EDGE_PCT (50)
 #define STEER_W_BOTH_LOST_PCT (40)
+
+#define CURV_NEAR_ROW_LO (5)
+#define CURV_NEAR_ROW_HI (25)
+#define CURV_FAR_ROW_LO (45)
+#define CURV_FAR_ROW_HI (70)
+#define CURV_MIN_SPAN_ROWS (6)
 
 #define EIGHTN_START_ROW (IMG_H - 2)
 #define EIGHTN_BORDER_MIN (1)
@@ -43,13 +50,30 @@
 #define KD (6.0f)
 #define D_FILT_ALPHA (0.4f)
 
-#define STRAIGHT_DUTY (2000) /* 直道/弯道上限 20%（满量程 10000） */
+#define STRAIGHT_DUTY (2000)   /* 直道基准占空比 20%（满量程 10000） */
 #define MOTOR_TEST_DUTY (2000) /* 电机测试模式固定占空比 20% */
-#define DUTY_HARD_CAP (6000)
-#define STEER_TURN_DUTY_PWM (20) /* 舵角偏离中心超过此值视为转弯，限速 STRAIGHT_DUTY */
+#define DUTY_HARD_CAP (4000)   /* 最高占空比 40% */
+#define MIN_TURN_DUTY (1800)   /* 过弯最低占空比 */
+
+#define ROWS_DUTY_TABLE_LEN (5)
+#define ROWS_DUTY_TABLE_ROWS {25, 45, 65, 85, 105}
+#define ROWS_DUTY_TABLE_DUTY {1800, 2200, 2600, 3000, 4000}
+
+#define CURV_DUTY_TABLE_LEN (4)
+#define CURV_DUTY_TABLE_CURV {40, 90, 160, 260}
+#define CURV_DUTY_TABLE_DUTY {4000, 2600, 2200, 1800}
+
+#define STEER_DUTY_SLOPE_NUM (12)
+#define STEER_DUTY_SLOPE_DEN (1)
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
-#define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
+#define DUTY_SLEW_UP (300)     /* 每帧最大升占空比；50fps 下 0→4000 约 0.27s */
+
+#define EXIT_CONFIRM_FRAMES (6) /* 出弯再加速确认帧数 */
+#define EXIT_ERR_MAX (10)       /* 出弯判定 |误差| 上限（像素） */
+#define EXIT_ROWS_MIN (70)      /* 出弯判定有效行下限 */
+#define EXIT_CURV_MAX (35)      /* 出弯判定 |曲率| 上限（Q8） */
+#define EXIT_MAX_BOTH_LOST (4)  /* 出弯判定双边丢失上限 */
 
 #define FAILSAFE_MIN_ROWS (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)
@@ -59,22 +83,25 @@
 
 #define MOTOR_PWM_FREQ (17000)
 
-#define KEY_SCAN_PERIOD_MS (5)  /* 按键扫描周期；与实测参考工程 JOYSTICK_SCAN_PERIOD_MS 一致 */
-#define KEY_DEBOUNCE_MS (20)    /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
+#define KEY_SCAN_PERIOD_MS                                                     \
+  (5) /* 按键扫描周期；与实测参考工程 JOYSTICK_SCAN_PERIOD_MS 一致 */
+#define KEY_DEBOUNCE_MS                                                        \
+  (20) /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
 #define KEY_DEBOUNCE_COUNT (KEY_DEBOUNCE_MS / KEY_SCAN_PERIOD_MS)
 #define KEY_LONG_PRESS_MS (1000) /* UP/DOWN 按住超过该时长后开始连发 */
-#define KEY_REPEAT_MS (80)       /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
+#define KEY_REPEAT_MS (80) /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
 
 /* 电池过放保护：逐飞主板 AN0 分压采样（典型 100k:10k → ×11，VREF=5V）
  * 本车电池：2S 锂电，满电 8.4V */
-#define BATTERY_ADC_RESOLUTION       ADC_12BIT
-#define BATTERY_ADC_SAMPLES          (8)
-#define BATTERY_ADC_REF_MV           (5000)
-#define BATTERY_DIVIDER_NUM          (11)
-#define BATTERY_DIVIDER_DEN          (1)
-#define BATTERY_MAX_MV               (8400)  /* 满电电压 */
-#define BATTERY_LOW_THRESH_MV        (8000)  /* 低于 8.0V 切断驱动，锁死至重新上电 */
-#define BATTERY_LOW_FRAMES           (5)     /* 连续低于阈值帧数（去抖） */
-#define BATTERY_CHECK_PERIOD_FRAMES  (10)    /* 采样间隔（帧）；50fps 下约 200ms */
+#define BATTERY_ADC_RESOLUTION ADC_12BIT
+#define BATTERY_ADC_SAMPLES (8)
+#define BATTERY_ADC_REF_MV (5000)
+#define BATTERY_DIVIDER_NUM (11)
+#define BATTERY_DIVIDER_DEN (1)
+#define BATTERY_MAX_MV (8400)        /* 满电电压 */
+#define BATTERY_LOW_THRESH_MV (8000) /* 低于 8.0V 切断驱动，锁死至重新上电 */
+#define BATTERY_LOW_FRAMES (5)       /* 连续低于阈值帧数（去抖） */
+#define BATTERY_CHECK_PERIOD_FRAMES (10) /* 采样间隔（帧）；50fps 下约 200ms \
+                                          */
 
 #endif /* CONFIG_H */
