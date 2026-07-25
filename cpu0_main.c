@@ -71,7 +71,14 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (drive_en && drive_armed && battery_ok()) {
+    if (menu_align_test_mode()) {
+      if (battery_ok()) {
+        motor_apply_servo_only(out.servo_pwm);
+      } else {
+        motor_reset();
+      }
+      control_duty_prev = 0;
+    } else if (drive_en && drive_armed && battery_ok()) {
       motor_apply(out.servo_pwm, out.duty);
       control_duty_prev = out.duty;
     } else {

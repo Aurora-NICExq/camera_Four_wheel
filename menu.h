@@ -39,8 +39,10 @@ void menu_task(void);   // 主循环每帧调用；非阻塞
 
 void menu_action_defaults(void);
 void menu_action_camera(void);
+void menu_action_align_test(void);
 void menu_action_reset(void);
 
 uint8_t menu_camera_view(void);
+uint8_t menu_align_test_mode(void);
 
 #endif

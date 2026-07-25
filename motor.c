@@ -51,3 +51,9 @@ void motor_reset(void)
     motor_stop();
     pwm_set_duty(PIN_SERVO_PWM, SERVO_CENTER);
 }
+
+void motor_apply_servo_only(uint16_t servo_pwm)
+{
+    motor_stop();
+    pwm_set_duty(PIN_SERVO_PWM, control_servo_clamp((int32_t)servo_pwm));
+}
