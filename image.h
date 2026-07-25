@@ -19,6 +19,12 @@ typedef struct
     int16_t  curvature;
     uint8_t  both_lost_rows;
     uint8_t  threshold;
+
+    uint8_t  cross_filled[IMG_H];
+    uint8_t  cross_valid;
+    uint8_t  cross_lo;
+    uint8_t  cross_hi;
+    uint8_t  inflect_row;
 } track_info_t;
 
 extern volatile int16_t image_threshold;
