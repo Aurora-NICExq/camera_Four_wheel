@@ -5,5 +5,9 @@
 *.d
 .DS_Store
 
+# Agent skills (local tooling, not versioned)
+.agents/
+skills-lock.json
+
 # Markdown docs (local notes, not versioned)
 *.md

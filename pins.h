@@ -17,9 +17,6 @@
 /* IPS200 背光：逐飞库默认 P15_4，本板改接 P20_14（须在 ips200_init 后再次 gpio_init） */
 #define PIN_IPS200_BL       (P20_14)
 
-/* 逐飞主板电池电压检测：AN0 → ADC0 通道 0 */
-#define PIN_BATTERY_ADC     (ADC0_CH0_A0)
-
 /* 四个独立按键（上拉输入，按下为低电平） */
 #define PIN_KEY_UP          (P13_3)   /* KEY1 */
 #define PIN_KEY_DOWN        (P11_9)   /* KEY2 */

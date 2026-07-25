@@ -68,7 +68,7 @@
 #define CURV_DUTY_TABLE_CURV {40, 90, 160, 260}
 #define CURV_DUTY_TABLE_DUTY {4000, 2600, 2200, 1800}
 
-#define STEER_DUTY_SLOPE_NUM (12)
+#define STEER_DUTY_SLOPE_NUM (24)
 #define STEER_DUTY_SLOPE_DEN (1)
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
@@ -95,18 +95,5 @@
 #define KEY_DEBOUNCE_COUNT (KEY_DEBOUNCE_MS / KEY_SCAN_PERIOD_MS)
 #define KEY_LONG_PRESS_MS (1000) /* UP/DOWN 按住超过该时长后开始连发 */
 #define KEY_REPEAT_MS (80) /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
-
-/* 电池过放保护：逐飞主板 AN0 分压采样（典型 100k:10k → ×11，VREF=5V）
- * 本车电池：2S 锂电，满电 8.4V */
-#define BATTERY_ADC_RESOLUTION ADC_12BIT
-#define BATTERY_ADC_SAMPLES (8)
-#define BATTERY_ADC_REF_MV (5000)
-#define BATTERY_DIVIDER_NUM (11)
-#define BATTERY_DIVIDER_DEN (1)
-#define BATTERY_MAX_MV (8400)        /* 满电电压 */
-#define BATTERY_LOW_THRESH_MV (8000) /* 低于 8.0V 切断驱动，锁死至重新上电 */
-#define BATTERY_LOW_FRAMES (5)       /* 连续低于阈值帧数（去抖） */
-#define BATTERY_CHECK_PERIOD_FRAMES (10) /* 采样间隔（帧）；50fps 下约 200ms \
-                                          */
 
 #endif /* CONFIG_H */
