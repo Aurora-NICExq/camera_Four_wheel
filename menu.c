@@ -87,7 +87,12 @@ static void draw_value(const menu_item_t *it, uint8_t row, float v, menu_style_e
     case ITEM_FLOAT:  menu_port_draw_float(VALUE_COL, row, v, 4, 2, st);                       break;
     case ITEM_INT16:  menu_port_draw_int (VALUE_COL, row, (int32_t)round_f(v), VALUE_WIDTH, st); break;
     case ITEM_UINT16: menu_port_draw_uint(VALUE_COL, row, (uint32_t)round_f(v), VALUE_WIDTH, st);break;
-    case ITEM_BOOL:   menu_port_draw_text(VALUE_COL, row, (v != 0.0f) ? "ON " : "OFF", st);    break;
+    case ITEM_BOOL:
+      if (drive_timed_out && v != 0.0f)
+        menu_port_draw_text(VALUE_COL, row, "TMO", st);
+      else
+        menu_port_draw_text(VALUE_COL, row, (v != 0.0f) ? "ON " : "OFF", st);
+      break;
     default: break;
     }
 }
@@ -250,6 +255,7 @@ void menu_init(void)
     menu_port_init();
     apply_defaults();
     drive_armed = 0;
+    drive_timed_out = 0;
     s_nav = NAV_LIST;
     s_cursor = 0;
     s_top = 0;

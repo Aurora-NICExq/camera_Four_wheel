@@ -11,6 +11,11 @@
 #define DRIVE_LAUNCH_DELAY_S (3)
 #define DRIVE_LAUNCH_DELAY_FRAMES (DRIVE_LAUNCH_DELAY_S * FRAMES_PER_SECOND)
 
+/* 发车后定时停车:只计实际驱动帧,延时窗口与失控暂停不计时;
+ * 触发后锁存,菜单 Armed 行显示 TMO,重新 OFF→ON 复位 */
+#define DRIVE_ARMED_TIMEOUT_S (15)
+#define DRIVE_ARMED_TIMEOUT_FRAMES (DRIVE_ARMED_TIMEOUT_S * FRAMES_PER_SECOND)
+
 #define FIXED_THRESHOLD (128)
 #define OTSU_ROW_STEP (2)
 #define OTSU_COL_STEP (2)

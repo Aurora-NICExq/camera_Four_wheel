@@ -26,6 +26,7 @@ int core0_main(void) {
   uint16_t fail_cnt = 0;
   uint8_t severe_fail_cnt = 0;
   uint16_t armed_wait_frames = 0;
+  uint16_t armed_drive_frames = 0;
   uint8_t drive_en = 1;
   control_out_t out = {0};
 
@@ -71,14 +72,24 @@ int core0_main(void) {
       motor_apply_servo_only(out.servo_pwm);
       control_duty_prev = 0;
     } else if (drive_en && drive_armed) {
-      if (armed_wait_frames < DRIVE_LAUNCH_DELAY_FRAMES) {
+      if (drive_timed_out) {
+        motor_reset();
+        control_duty_prev = 0;
+        control_duty_reset();
+      } else if (armed_wait_frames < DRIVE_LAUNCH_DELAY_FRAMES) {
         armed_wait_frames++;
         motor_apply_servo_only(out.servo_pwm);
+        control_duty_prev = 0;
+        control_duty_reset();
+      } else if (armed_drive_frames >= DRIVE_ARMED_TIMEOUT_FRAMES) {
+        drive_timed_out = 1;
+        motor_reset();
         control_duty_prev = 0;
         control_duty_reset();
       } else {
         motor_apply(out.servo_pwm, out.duty);
         control_duty_prev = out.duty;
+        armed_drive_frames++;
       }
     } else {
       motor_reset();
@@ -92,6 +103,8 @@ int core0_main(void) {
 
     if (!drive_armed) {
       armed_wait_frames = 0;
+      armed_drive_frames = 0;
+      drive_timed_out = 0;
     }
 
     if (menu_camera_view())
