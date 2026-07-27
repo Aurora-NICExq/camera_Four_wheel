@@ -9,7 +9,7 @@ volatile float   steer_kp_max       = KP_MAX;
 volatile float   steer_kp_e_sat     = KP_E_SAT;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
-volatile float   curve_cut         = CURVE_CUT_DUTY;
+volatile uint16_t curve_duty       = CURVE_DUTY;
 volatile uint16_t straight_duty    = STRAIGHT_MAX_DUTY;
 volatile int16_t straight_judge     = STRAIGHT_JUDGE;
 volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
@@ -109,6 +109,10 @@ static uint8_t border_strict(const track_info_t *ti, uint8_t use_left)
 
 static uint8_t straight_flag_judge(const track_info_t *ti)
 {
+    if (ti->valid_rows < STRAIGHT_MIN_ROWS)
+    {
+        return 0u;
+    }
     if (border_strict(ti, 1u) && border_strict(ti, 0u))
     {
         return 1u;
@@ -204,8 +208,11 @@ void control_update(const track_info_t *ti, control_out_t *out)
     temp     = curve_temp(ti);
 
     speed_f = (float)drive_duty_base;
-    speed_f -= curve_cut * temp;
-    if (straight)
+    if (speed_f > (float)curve_duty)
+    {
+        speed_f -= (speed_f - (float)curve_duty) * temp;
+    }
+    if (straight && (float)straight_duty > speed_f)
     {
         speed_f = (float)straight_duty;
     }

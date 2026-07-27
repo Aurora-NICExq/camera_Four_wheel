@@ -7,7 +7,7 @@ extern volatile float   steer_kp_max;
 extern volatile float   steer_kp_e_sat;
 extern volatile float   steer_kd;
 extern volatile float   steer_d_filt_alpha;
-extern volatile float   curve_cut;
+extern volatile uint16_t curve_duty;
 extern volatile uint16_t straight_duty;
 extern volatile int16_t straight_judge;
 extern volatile int16_t straight_judge_13;
@@ -22,7 +22,7 @@ const menu_item_t menu_items[] = {
     MENU_F32("Kp E Sat",     steer_kp_e_sat,     5.0f, 80.0f, 1.0f,  KP_E_SAT),
     MENU_F32("Kd",           steer_kd,           0.0f, 30.0f, 0.1f,  KD),
     MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, D_FILT_ALPHA),
-    MENU_F32("Curve Cut",    curve_cut,          0.0f, 3000.0f, 50.0f, CURVE_CUT_DUTY),
+    MENU_U16("Curve Duty",   curve_duty,         0,    DUTY_HARD_CAP, 100, CURVE_DUTY),
     MENU_U16("Str Duty",    straight_duty,      0,    DUTY_HARD_CAP, 100, STRAIGHT_MAX_DUTY),
     MENU_I16("Threshold",    image_threshold,    0,    255,   1,     0),
     MENU_U16("Duty",        drive_duty_base,    0,    DUTY_HARD_CAP, 100, STRAIGHT_DUTY),

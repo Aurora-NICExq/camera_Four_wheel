@@ -53,10 +53,11 @@
 #define STRAIGHT_DUTY (2500) /* 基准占空比 25%（满量程 10000） */
 #define DUTY_HARD_CAP (6000)
 
-/* 曲率速度调度：target = Duty - CurveCut×temp；直道确认后 = Str Duty
- * 默认：弯底 20% / 基准 25% / 直道 32%（菜单可调） */
-#define CURVE_CUT_DUTY (500)   /* 急弯(temp=1)从基准削减量 → 25%-5%=20% */
+/* 曲率速度调度:急弯目标为绝对值 Curve Duty,不随 Duty 上浮:
+ * target = Duty - (Duty - CurveDuty)×temp;直道确认(且行数足够)只增不减 = Str Duty */
+#define CURVE_DUTY (2000)        /* 急弯(temp=1)绝对目标占空比 20% */
 #define STRAIGHT_MAX_DUTY (3200) /* 直道确认目标占空比 32% */
+#define STRAIGHT_MIN_ROWS (80)   /* 直道确认所需最少有效行,视野变短即提前退出加速 */
 #define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
 #define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
 #define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */
