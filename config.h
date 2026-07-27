@@ -40,15 +40,23 @@
 #define SERVO_DIR (-1)
 #define SERVO_SLEW_LIMIT (45)
 
-#define KP_MIN (1.0f)
-#define KP_MAX (9.58f)
+#define KP_MIN (1.09f)
+#define KP_MAX (9.48f)
 #define KP_E_SAT (35.0f)
-#define KD (3.58f)
+#define KD (1.49f)
 #define D_FILT_ALPHA (0.4f)
 
-#define STRAIGHT_DUTY (2500) /* 直道/弯道上限 20%（满量程 10000） */
+#define STRAIGHT_DUTY (2500) /* 基准占空比 25%（满量程 10000） */
 #define DUTY_HARD_CAP (6000)
-#define STEER_TURN_DUTY_PWM (20) /* 舵角偏离中心超过此值视为转弯，限速 STRAIGHT_DUTY */
+
+/* 曲率速度调度：target = Duty - CurveCut×temp；直道确认后 = Str Duty
+ * 默认：弯底 20% / 基准 25% / 直道 32%（菜单可调） */
+#define CURVE_CUT_DUTY (500)   /* 急弯(temp=1)从基准削减量 → 25%-5%=20% */
+#define STRAIGHT_MAX_DUTY (3200) /* 直道确认目标占空比 32% */
+#define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
+#define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
+#define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */
+#define SLOW_MOTOR_STEP (50)   /* 缓启动：|target-now|<=50 或已到目标后放开 */
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */

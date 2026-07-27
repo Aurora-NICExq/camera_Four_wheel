@@ -1,4 +1,4 @@
-/* control.c - steer PD + steer-based duty cap */
+/* control.c - gain-scheduled PD steer + curve speed schedule */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -9,6 +9,10 @@ volatile float   steer_kp_max       = KP_MAX;
 volatile float   steer_kp_e_sat     = KP_E_SAT;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
+volatile float   curve_cut         = CURVE_CUT_DUTY;
+volatile uint16_t straight_duty    = STRAIGHT_MAX_DUTY;
+volatile int16_t straight_judge     = STRAIGHT_JUDGE;
+volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
 volatile uint8_t  drive_armed       = 0;
 volatile uint16_t drive_duty_base   = STRAIGHT_DUTY;
 volatile uint16_t control_duty_prev = 0;
@@ -17,6 +21,28 @@ static int16_t  g_prev_error;
 static float    g_d_filt;
 static uint16_t g_duty_now;
 static uint16_t g_servo_now;
+static uint8_t  g_slow_motor;
+
+static int16_t iabs16(int16_t v)
+{
+    return (v >= 0) ? v : (int16_t)(-v);
+}
+
+/* 近车端 track 行：TR_ROW(EIGHTN_START_ROW)，与 export_track 写入对齐 */
+static uint8_t track_near_row(void)
+{
+    return (uint8_t)(IMG_H - 1u - EIGHTN_START_ROW);
+}
+
+static uint8_t track_far_row(const track_info_t *ti)
+{
+    return (uint8_t)(track_near_row() + ti->valid_rows - 1u);
+}
+
+static uint8_t track_mid_row(const track_info_t *ti)
+{
+    return (uint8_t)(track_near_row() + ti->valid_rows / 2u);
+}
 
 uint16_t control_servo_clamp(int32_t servo_raw)
 {
@@ -25,12 +51,102 @@ uint16_t control_servo_clamp(int32_t servo_raw)
     return (uint16_t)servo_raw;
 }
 
+/* 单侧严格直道：远/中/近三行边界共线 */
+static uint8_t border_strict(const track_info_t *ti, uint8_t use_left)
+{
+    uint8_t far_r;
+    uint8_t mid_r;
+    uint8_t near_r;
+    int16_t v_far;
+    int16_t v_mid;
+    int16_t v_near;
+    int16_t tem;
+    int16_t tem1;
+
+    if (ti->valid_rows < 6u)
+    {
+        return 0u;
+    }
+
+    near_r = track_near_row();
+    far_r  = track_far_row(ti);
+    mid_r  = track_mid_row(ti);
+
+    if (use_left)
+    {
+        if (ti->left_lost[far_r] || ti->left_lost[mid_r] || ti->left_lost[near_r])
+        {
+            return 0u;
+        }
+        v_far  = (int16_t)ti->left[far_r];
+        v_mid  = (int16_t)ti->left[mid_r];
+        v_near = (int16_t)ti->left[near_r];
+    }
+    else
+    {
+        if (ti->right_lost[far_r] || ti->right_lost[mid_r] || ti->right_lost[near_r])
+        {
+            return 0u;
+        }
+        v_far  = (int16_t)ti->right[far_r];
+        v_mid  = (int16_t)ti->right[mid_r];
+        v_near = (int16_t)ti->right[near_r];
+    }
+
+    tem  = iabs16((int16_t)(v_mid - v_near)) + iabs16((int16_t)(v_far - v_mid));
+    tem1 = iabs16((int16_t)(v_far - v_near));
+
+    if (tem <= straight_judge && tem1 <= straight_judge)
+    {
+        return 1u;
+    }
+    if (tem1 >= straight_judge_13)
+    {
+        return 0u;
+    }
+    return 0u;
+}
+
+static uint8_t straight_flag_judge(const track_info_t *ti)
+{
+    if (border_strict(ti, 1u) && border_strict(ti, 0u))
+    {
+        return 1u;
+    }
+    return 0u;
+}
+
+/* temp = |mid远 - mid近| / CURVE_TEMP_DIV，上限 1 */
+static float curve_temp(const track_info_t *ti)
+{
+    uint8_t near_r;
+    uint8_t far_r;
+    int16_t diff;
+    float temp;
+
+    if (ti->valid_rows < 2u)
+    {
+        return 1.0f;
+    }
+
+    near_r = track_near_row();
+    far_r  = track_far_row(ti);
+    diff   = (int16_t)ti->mid[far_r] - (int16_t)ti->mid[near_r];
+    temp   = (float)iabs16(diff) / (float)CURVE_TEMP_DIV;
+    if (temp > 1.0f)
+    {
+        temp = 1.0f;
+    }
+    return temp;
+}
+
 void control_init(void)
 {
     g_prev_error = 0;
     g_d_filt     = 0.0f;
     g_duty_now   = 0;
     g_servo_now  = SERVO_CENTER;
+    g_slow_motor = 1u;
 }
 
 void control_reset(void)
@@ -41,12 +157,17 @@ void control_reset(void)
 
 void control_duty_reset(void)
 {
-    g_duty_now = 0;
+    g_duty_now   = 0;
+    g_slow_motor = 1u;
 }
 
 void control_update(const track_info_t *ti, control_out_t *out)
 {
     int16_t error = ti->error;
+    float speed_f;
+    float temp;
+    uint16_t target;
+    uint8_t straight;
 
     float d_raw = (float)(error - g_prev_error);
     g_prev_error = error;
@@ -73,7 +194,35 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     out->servo_pwm = control_servo_clamp(g_servo_now);
 
-    uint16_t target = drive_duty_base;
+    straight = straight_flag_judge(ti);
+    temp     = curve_temp(ti);
+
+    speed_f = (float)drive_duty_base;
+    speed_f -= curve_cut * temp;
+    if (straight)
+    {
+        speed_f = (float)straight_duty;
+    }
+
+    if (g_slow_motor)
+    {
+        int32_t diff = (int32_t)speed_f - (int32_t)g_duty_now;
+        if (diff < 0) diff = -diff;
+        if (diff <= SLOW_MOTOR_STEP || g_duty_now >= (uint16_t)speed_f)
+        {
+            g_slow_motor = 0u;
+        }
+        else
+        {
+            speed_f = (float)g_duty_now + speed_f / 4.0f;
+        }
+    }
+
+    if (speed_f < 0.0f)
+    {
+        speed_f = 0.0f;
+    }
+    target = (uint16_t)speed_f;
     if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
 
     out->duty_target = target;
