@@ -7,6 +7,10 @@
 #define IMG_CENTER (94)
 #define FRAMES_PER_SECOND (50)
 
+/* arm 后延时发车:窗口内舵机先对线、电机不动,发车帧从软启动起步 */
+#define DRIVE_LAUNCH_DELAY_S (3)
+#define DRIVE_LAUNCH_DELAY_FRAMES (DRIVE_LAUNCH_DELAY_S * FRAMES_PER_SECOND)
+
 #define FIXED_THRESHOLD (128)
 #define OTSU_ROW_STEP (2)
 #define OTSU_COL_STEP (2)
