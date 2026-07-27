@@ -32,18 +32,18 @@ static int my_abs(int v)
     return (v >= 0) ? v : -v;
 }
 
-static uint8_t clamp_u8(int32_t v, int32_t lo, int32_t hi)
-{
-    if (v < lo) return (uint8_t)lo;
-    if (v > hi) return (uint8_t)hi;
-    return (uint8_t)v;
-}
-
 static int16_t limit_a_b(int16_t x, int16_t a, int16_t b)
 {
     if (x < a) return a;
     if (x > b) return b;
     return x;
+}
+
+static uint8_t clamp_u8(int32_t v, int32_t lo, int32_t hi)
+{
+    if (v < lo) return (uint8_t)lo;
+    if (v > hi) return (uint8_t)hi;
+    return (uint8_t)v;
 }
 
 static void init_cross_meta(track_info_t *ti)
@@ -63,29 +63,19 @@ static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W])
 {
     uint32_t hist[256] = {0};
     uint32_t total = 0;
-    uint16_t r, c;
-    uint8_t pixel_min = 255;
-    uint8_t pixel_max = 0;
+    uint16_t r, c, i;
 
     for (r = 0; r < IMG_H; r += OTSU_ROW_STEP)
     {
         for (c = 0; c < IMG_W; c += OTSU_COL_STEP)
         {
-            uint8_t v = img[r][c];
-            hist[v]++;
+            hist[img[r][c]]++;
             total++;
-            if (v < pixel_min) pixel_min = v;
-            if (v > pixel_max) pixel_max = v;
         }
     }
 
-    if (total == 0)
-    {
-        return (uint8_t)FIXED_THRESHOLD;
-    }
-
     uint64_t sum_all = 0;
-    for (uint16_t i = pixel_min; i <= pixel_max; i++)
+    for (i = 0; i < 256; i++)
     {
         sum_all += (uint64_t)i * hist[i];
     }
@@ -95,7 +85,7 @@ static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W])
     uint32_t w0 = 0;
     uint64_t sum0 = 0;
 
-    for (uint16_t i = pixel_min; i < pixel_max; i++)
+    for (i = 0; i < 256; i++)
     {
         w0 += hist[i];
         if (w0 == 0) continue;
@@ -110,10 +100,6 @@ static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W])
         {
             best_var = var;
             best_th = i;
-        }
-        if (var < best_var)
-        {
-            break;
         }
     }
 
@@ -679,22 +665,6 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     return (int16_t)(acc / w_sum);
 }
 
-static int16_t segment_slope_q8(const track_info_t *ti, uint8_t lo, uint8_t hi, uint8_t *ok)
-{
-    *ok = 0;
-    if (hi >= ti->valid_rows) hi = (uint8_t)(ti->valid_rows - 1u);
-    while (lo < hi && ti->left_lost[lo] && ti->right_lost[lo]) lo++;
-    while (hi > lo && ti->left_lost[hi] && ti->right_lost[hi]) hi--;
-    if (hi <= lo || (uint8_t)(hi - lo) < CURV_MIN_SPAN_ROWS ||
-        (ti->left_lost[lo] && ti->right_lost[lo]))
-    {
-        return 0;
-    }
-    *ok = 1;
-    return (int16_t)((((int32_t)ti->mid[hi] - (int32_t)ti->mid[lo]) * 256) /
-                     (int32_t)(hi - lo));
-}
-
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
 {
     uint8_t th;
@@ -727,19 +697,6 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     else
     {
         export_track(out, EIGHTN_START_ROW + 1u);
-    }
-
-    if (out->valid_rows > CURV_FAR_ROW_LO)
-    {
-        uint8_t near_ok;
-        uint8_t far_ok;
-        int16_t s_near = segment_slope_q8(out, CURV_NEAR_ROW_LO, CURV_NEAR_ROW_HI, &near_ok);
-        int16_t s_far  = segment_slope_q8(out, CURV_FAR_ROW_LO,  CURV_FAR_ROW_HI,  &far_ok);
-        out->curvature = (near_ok && far_ok) ? (int16_t)(s_far - s_near) : 0;
-    }
-    else
-    {
-        out->curvature = 0;
     }
 
     out->error = weighted_error(out, duty_now);

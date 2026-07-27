@@ -24,6 +24,8 @@ void motor_hw_init(void)
     pwm_init(PIN_MOTOR_RIGHT_IN2, MOTOR_PWM_FREQ, 0U);
 
     motor_stop();
+
+    gpio_init(PIN_BUZZER, GPO, GPIO_LOW, GPO_PUSH_PULL);
 }
 
 void motor_apply(uint16_t servo_pwm, uint16_t duty)
@@ -56,4 +58,19 @@ void motor_apply_servo_only(uint16_t servo_pwm)
 {
     motor_stop();
     pwm_set_duty(PIN_SERVO_PWM, control_servo_clamp((int32_t)servo_pwm));
+}
+
+uint32_t hal_time_us(void)
+{
+    return (uint32_t)system_getval_us();
+}
+
+void hal_buzzer_on(void)
+{
+    gpio_set_level(PIN_BUZZER, GPIO_HIGH);
+}
+
+void hal_buzzer_off(void)
+{
+    gpio_set_level(PIN_BUZZER, GPIO_LOW);
 }

@@ -20,7 +20,6 @@ int core0_main(void) {
   control_init();
   menu_init();
 
-  system_delay_ms(CAMERA_POWER_ON_DELAY_MS);
   mt9v03x_init();
   cpu_wait_event_ready();
 

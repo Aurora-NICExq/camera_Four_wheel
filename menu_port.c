@@ -4,7 +4,7 @@
 #include "config.h"
 #include "menu_port.h"
 
-/* ---- 按键输入：四个独立按键（上拉输入，按下为低） --------------------
+/* ---- 按键输入：逐飞主板四个独立按键 KEY1~KEY4（上拉输入，按下为低） --------------------
  * 扫描/消抖/事件模型移植自另一块板（五向摇杆）实测可用的工程：
  *   - 每 KEY_SCAN_PERIOD_MS 采样一次；
  *   - 采样与稳定态连续 KEY_DEBOUNCE_COUNT 次不一致才翻转稳定态；
@@ -35,6 +35,8 @@ static key_fsm_t s_keys[KEY_COUNT] =
 static uint8_t  s_pending = 0;         /* bit i = s_keys[i] 的按下沿事件 */
 static uint32_t s_last_scan_ms = 0;
 static uint32_t s_last_repeat_ms = 0;
+static menu_key_e s_last_key = MENU_KEY_NONE;
+static uint8_t    s_last_repeat = 0;
 
 static uint8_t key_pressed(gpio_pin_enum pin)
 {
@@ -174,6 +176,8 @@ void menu_port_scan_keys(menu_key_event_t *ev)
                 continue;              /* 未映射按键：丢弃，继续找下一个 */
             }
             ev->key = s_keys[i].map;
+            s_last_key = ev->key;
+            s_last_repeat = 0;
             return;
         }
     }
@@ -191,9 +195,68 @@ void menu_port_scan_keys(menu_key_event_t *ev)
                 s_last_repeat_ms = now;
                 ev->key = s_keys[i].map;
                 ev->is_repeat = 1;
+                s_last_key = ev->key;
+                s_last_repeat = 1;
             }
             break;                     /* 只看优先级最高的一个按住键 */
         }
     }
 }
 
+static const char *key_name(menu_key_e key)
+{
+    switch (key)
+    {
+    case MENU_KEY_UP:    return "UP ";
+    case MENU_KEY_DOWN:  return "DN ";
+    case MENU_KEY_ENTER: return "ENT";
+    case MENU_KEY_BACK:  return "BAK";
+    default:             return "---";
+    }
+}
+
+uint8_t menu_port_key_pressed(menu_key_e key)
+{
+    uint8_t i;
+
+    for (i = 0; i < KEY_COUNT; i++)
+    {
+        if (s_keys[i].map == key)
+        {
+            return s_keys[i].pressed;
+        }
+    }
+    return 0;
+}
+
+void menu_port_draw_key_status(void)
+{
+    char line[MENU_COLS + 1];
+    uint8_t i;
+    uint8_t n = 0;
+
+    for (i = 0; i < MENU_COLS; i++)
+    {
+        line[i] = ' ';
+    }
+    line[MENU_COLS] = '\0';
+
+    line[n++] = 'K';
+    line[n++] = ':';
+    for (i = 0; i < KEY_COUNT; i++)
+    {
+        line[n++] = (s_keys[i].pressed != 0) ? ('1' + i) : '-';
+    }
+    line[n++] = ' ';
+    line[n++] = 'L';
+    line[n++] = '=';
+    line[n++] = key_name(s_last_key)[0];
+    line[n++] = key_name(s_last_key)[1];
+    line[n++] = key_name(s_last_key)[2];
+    if (s_last_repeat != 0)
+    {
+        line[n++] = 'R';
+    }
+
+    menu_port_draw_text(0, (uint8_t)(MENU_ROWS - 1), line, MENU_STYLE_NORMAL);
+}
