@@ -78,7 +78,7 @@ int core0_main(void) {
         control_duty_reset();
       } else if (armed_wait_frames < DRIVE_LAUNCH_DELAY_FRAMES) {
         armed_wait_frames++;
-        motor_apply_servo_only(out.servo_pwm);
+        motor_reset();
         control_duty_prev = 0;
         control_duty_reset();
       } else if (armed_drive_frames >= DRIVE_ARMED_TIMEOUT_FRAMES) {

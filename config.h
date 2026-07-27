@@ -7,8 +7,8 @@
 #define IMG_CENTER (94)
 #define FRAMES_PER_SECOND (50)
 
-/* arm 后延时发车:窗口内舵机先对线、电机不动,发车帧从软启动起步 */
-#define DRIVE_LAUNCH_DELAY_S (3)
+/* arm 后延时发车:窗口内整车静止(舵机保持回中),发车帧从软启动起步 */
+#define DRIVE_LAUNCH_DELAY_S (2)
 #define DRIVE_LAUNCH_DELAY_FRAMES (DRIVE_LAUNCH_DELAY_S * FRAMES_PER_SECOND)
 
 /* 发车后定时停车:只计实际驱动帧,延时窗口与失控暂停不计时;
