@@ -43,42 +43,35 @@
 #define EIGHTN_MEET_DIST (2)
 
 #define SERVO_PWM_HZ (50)
-#define SERVO_CENTER (770)
-#define SERVO_MIN (685)
-#define SERVO_MAX (850)
+#define SERVO_CENTER (705)
+#define SERVO_MIN (640)
+#define SERVO_MAX (770)
 #define SERVO_DIR (-1)
-#define SERVO_SLEW_LIMIT (45)
 
-#define KP_MIN (1.0f)
-#define KP_MAX (3.2f)
-#define KP_E_SAT (40.0f)
-#define KD (6.0f)
-#define D_FILT_ALPHA (0.4f)
+/* 丑牛 servoPID_ccd：P + P2*|e|*e + I + D*de；无舵机斜率限制 */
+#define SERVO_P (2.5f)
+#define SERVO_P2 (0.0f)
+#define SERVO_I (0.0f)
+#define SERVO_D (8.0f)
+#define SERVO_A (0.0f) /* 陀螺仪角速度反馈；无 IMU 时保持 0 */
 
-#define STRAIGHT_DUTY (2000)   /* 直道基准占空比 20%（满量程 10000） */
-#define MOTOR_TEST_DUTY (2000) /* 电机测试模式固定占空比 20% */
-#define DUTY_HARD_CAP (4000)   /* 最高占空比 40% */
-#define MIN_TURN_DUTY (1800)   /* 过弯最低占空比 */
+/* 丑牛 steering_type 速度：ex_speed + steer_up*(1-temp) + speed_up(直道) */
+#define EX_SPEED_DUTY (2000)   /* car.ex_speed → 基础占空比 */
+#define STEER_UP_DUTY (800)    /* car.steer_up  直道加成系数 */
+#define SPEED_UP_DUTY (500)    /* car.speed_up  双直道确认后额外加成 */
+#define CURVE_TEMP_DIV (30)    /* temp = |mid远- mid近| / 30，上限 1 */
 
-#define ROWS_DUTY_TABLE_LEN (5)
-#define ROWS_DUTY_TABLE_ROWS {25, 45, 65, 85, 105}
-#define ROWS_DUTY_TABLE_DUTY {1800, 2200, 2600, 3000, 4000}
+/* 丑牛 straight() / speed_up_judge() */
+#define STRAIGHT_JUDGE (8)     /* car.set_judge 边界共线判定阈值（像素） */
+#define STRAIGHT_JUDGE_13 (25) /* car.judge_13 远近端差距过大则不算直道 */
 
-#define CURV_DUTY_TABLE_LEN (4)
-#define CURV_DUTY_TABLE_CURV {40, 90, 160, 260}
-#define CURV_DUTY_TABLE_DUTY {4000, 2600, 2200, 1800}
+#define MOTOR_TEST_DUTY (2000)
+#define DUTY_HARD_CAP (6000)
 
-#define STEER_DUTY_SLOPE_NUM (24)
-#define STEER_DUTY_SLOPE_DEN (1)
+#define DUTY_SLEW_DOWN (10000)
+#define DUTY_SLEW_UP (120)
 
-#define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
-#define DUTY_SLEW_UP (300)     /* 每帧最大升占空比；50fps 下 0→4000 约 0.27s */
-
-#define EXIT_CONFIRM_FRAMES (6) /* 出弯再加速确认帧数 */
-#define EXIT_ERR_MAX (10)       /* 出弯判定 |误差| 上限（像素） */
-#define EXIT_ROWS_MIN (70)      /* 出弯判定有效行下限 */
-#define EXIT_CURV_MAX (35)      /* 出弯判定 |曲率| 上限（Q8） */
-#define EXIT_MAX_BOTH_LOST (4)  /* 出弯判定双边丢失上限 */
+#define SLOW_MOTOR_STEP (50)   /* 丑牛缓启动：|ave-target|<=50 或已到目标后放开 */
 
 #define FAILSAFE_MIN_ROWS (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)
@@ -93,7 +86,7 @@
 #define KEY_DEBOUNCE_MS                                                        \
   (20) /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
 #define KEY_DEBOUNCE_COUNT (KEY_DEBOUNCE_MS / KEY_SCAN_PERIOD_MS)
-#define KEY_LONG_PRESS_MS (1000) /* UP/DOWN 按住超过该时长后开始连发 */
-#define KEY_REPEAT_MS (80) /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
+#define KEY_LONG_PRESS_MS (1000)
+#define KEY_REPEAT_MS (80)
 
 #endif /* CONFIG_H */
