@@ -20,7 +20,6 @@ volatile uint16_t control_duty_prev = 0;
 static int16_t  g_prev_error;
 static float    g_d_filt;
 static uint16_t g_duty_now;
-static uint16_t g_servo_now;
 static uint8_t  g_slow_motor;
 
 static int16_t iabs16(int16_t v)
@@ -163,7 +162,6 @@ void control_init(void)
     g_prev_error = 0;
     g_d_filt     = 0.0f;
     g_duty_now   = 0;
-    g_servo_now  = SERVO_CENTER;
     g_slow_motor = 1u;
 }
 
@@ -199,18 +197,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     int32_t servo_raw = SERVO_CENTER
                       + (int32_t)(SERVO_DIR * (kp * (float)error + steer_kd * g_d_filt));
 
-    uint16_t servo_target = control_servo_clamp(servo_raw);
-    if (servo_target > g_servo_now)
-    {
-        uint16_t step = (uint16_t)(servo_target - g_servo_now);
-        g_servo_now += (step > SERVO_SLEW_LIMIT) ? SERVO_SLEW_LIMIT : step;
-    }
-    else
-    {
-        uint16_t step = (uint16_t)(g_servo_now - servo_target);
-        g_servo_now -= (step > SERVO_SLEW_LIMIT) ? SERVO_SLEW_LIMIT : step;
-    }
-    out->servo_pwm = control_servo_clamp(g_servo_now);
+    out->servo_pwm = control_servo_clamp(servo_raw);
 
     straight = straight_flag_judge(ti);
     temp     = curve_temp(ti);

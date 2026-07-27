@@ -42,7 +42,6 @@
 #define SERVO_MIN (629)
 #define SERVO_MAX (781)
 #define SERVO_DIR (-1)
-#define SERVO_SLEW_LIMIT (45)
 
 #define KP_MIN (1.09f)
 #define KP_MAX (9.48f)
