@@ -140,6 +140,24 @@ static float curve_temp(const track_info_t *ti)
     return temp;
 }
 
+/* 有效行数限速(master cap_rows 通道):入弯口视野塌缩早于近端误差出现,
+   按可见行数封顶目标占空比 */
+static uint16_t rows_duty_cap(uint8_t rows)
+{
+    static const uint8_t  bins[ROWS_CAP_TABLE_LEN] = ROWS_CAP_BINS;
+    static const uint16_t caps[ROWS_CAP_TABLE_LEN] = ROWS_CAP_DUTY;
+    uint8_t i;
+
+    for (i = 0; i < ROWS_CAP_TABLE_LEN; i++)
+    {
+        if (rows < bins[i])
+        {
+            return caps[i];
+        }
+    }
+    return DUTY_HARD_CAP;
+}
+
 void control_init(void)
 {
     g_prev_error = 0;
@@ -202,6 +220,14 @@ void control_update(const track_info_t *ti, control_out_t *out)
     if (straight)
     {
         speed_f = (float)straight_duty;
+    }
+
+    {
+        uint16_t cap = rows_duty_cap(ti->valid_rows);
+        if (speed_f > (float)cap)
+        {
+            speed_f = (float)cap;
+        }
     }
 
     if (g_slow_motor)

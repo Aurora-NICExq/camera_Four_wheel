@@ -286,11 +286,13 @@ static void search_l_r(uint16_t break_flag,
             }
         }
 
-        if ((points_r[r_data_statics][0] == points_r[r_data_statics - 1][0] &&
+        if ((r_data_statics >= 2u &&
+             points_r[r_data_statics][0] == points_r[r_data_statics - 1][0] &&
              points_r[r_data_statics][0] == points_r[r_data_statics - 2][0] &&
              points_r[r_data_statics][1] == points_r[r_data_statics - 1][1] &&
              points_r[r_data_statics][1] == points_r[r_data_statics - 2][1]) ||
-            (points_l[l_data_statics - 1][0] == points_l[l_data_statics - 2][0] &&
+            (l_data_statics >= 3u &&
+             points_l[l_data_statics - 1][0] == points_l[l_data_statics - 2][0] &&
              points_l[l_data_statics - 1][0] == points_l[l_data_statics - 3][0] &&
              points_l[l_data_statics - 1][1] == points_l[l_data_statics - 2][1] &&
              points_l[l_data_statics - 1][1] == points_l[l_data_statics - 3][1]))
@@ -423,7 +425,6 @@ static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
     float x2sum = 0.0f;
     int16_t i;
     float result = 0.0f;
-    static float result_last;
 
     for (i = (int16_t)begin; i < (int16_t)end; i++)
     {
@@ -438,11 +439,6 @@ static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
         if (denom != 0.0f)
         {
             result = (((float)(end - begin) * xysum - xsum * ysum) / denom);
-            result_last = result;
-        }
-        else
-        {
-            result = result_last;
         }
     }
     return result;
@@ -553,6 +549,41 @@ static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti)
         return;
     }
 
+    /* 拟合窗口需完整落在图像内(break-SLOPE_BACK 不得下溢,否则越界拟合) */
+    if (cross_break_l <= EIGHTN_CROSS_SLOPE_BACK ||
+        cross_break_r <= EIGHTN_CROSS_SLOPE_BACK)
+    {
+        return;
+    }
+
+    /* 真十字:左右上拐点行号接近,且拐点下方开口接近全宽。
+       弯道拐点同样能凑出 4,4,6,6,6 方向序列,但内侧边界仍在、宽度不足,
+       误补线会把弯道中线拉直、掏空转向误差 */
+    if (my_abs((int)cross_break_l - (int)cross_break_r) > EIGHTN_CROSS_BREAK_DROW)
+    {
+        return;
+    }
+    {
+        uint8_t base = (cross_break_l > cross_break_r) ? cross_break_l : cross_break_r;
+        uint16_t row;
+        uint8_t samples = 0;
+        uint8_t open_cnt = 0;
+        for (row = (uint16_t)base + 2u;
+             row < (uint16_t)base + 12u && row <= (uint16_t)EIGHTN_CROSS_OPEN_ROW_MAX;
+             row++)
+        {
+            samples++;
+            if (((int16_t)r_border[row] - (int16_t)l_border[row]) >= EIGHTN_CROSS_OPEN_WIDTH)
+            {
+                open_cnt++;
+            }
+        }
+        if (samples >= 4u && ((uint16_t)open_cnt * 3u) < ((uint16_t)samples * 2u))
+        {
+            return;
+        }
+    }
+
     cross_flag = 1;
     fill_from = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
 
@@ -615,8 +646,8 @@ static void export_track(track_info_t *ti, uint8_t hightest)
         ti->right[tr] = clamp_u8(r_border[ir], 0, IMG_W - 1);
         ti->mid[tr] = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
         ti->width[tr] = (uint8_t)(ti->right[tr] - ti->left[tr]);
-        ti->left_lost[tr] = (uint8_t)(l_border[ir] <= EIGHTN_BORDER_MIN);
-        ti->right_lost[tr] = (uint8_t)(r_border[ir] >= EIGHTN_BORDER_MAX);
+        ti->left_lost[tr] = (uint8_t)(l_border[ir] <= (EIGHTN_BORDER_MIN + EIGHTN_EDGE_LOST_MARGIN));
+        ti->right_lost[tr] = (uint8_t)(r_border[ir] >= (EIGHTN_BORDER_MAX - EIGHTN_EDGE_LOST_MARGIN));
         if (ti->left_lost[tr] && ti->right_lost[tr])
         {
             both_lost++;
@@ -624,6 +655,19 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     }
 
     ti->valid_rows = (uint8_t)(hi - lo + 1u);
+
+    /* 裁掉远端连续双丢行:搜索未到达或沿图像黑框爬行的行只有假居中数据,
+       留在 valid_rows 里会稀释 weighted_error,并让 curve_temp 在入弯口失明 */
+    while (ti->valid_rows > 0u)
+    {
+        uint8_t far_tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + ti->valid_rows - 1u);
+        if (!(ti->left_lost[far_tr] && ti->right_lost[far_tr]))
+        {
+            break;
+        }
+        ti->valid_rows--;
+        both_lost--;
+    }
     ti->both_lost_rows = both_lost;
 }
 
@@ -639,26 +683,29 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     int32_t w_sum = 0;
     uint8_t r;
 
+    /* export_track 从 TR_ROW(EIGHTN_START_ROW) 起写入,track 行 0 无数据;
+       band 仍按相对行号划分 */
     for (r = 0; r < ti->valid_rows; r++)
     {
+        uint8_t tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + r);
         uint8_t band = (uint8_t)(r / STEER_W_BAND_ROWS);
         if (band >= STEER_W_BANDS) band = STEER_W_BANDS - 1;
         int32_t w = (int32_t)w_low[band] * (int32_t)(256u - k)
                   + (int32_t)w_high[band] * (int32_t)k;
 
-        if (ti->cross_filled[r])
+        if (ti->cross_filled[tr])
         {
             w = (w * STEER_W_CROSS_FILL_PCT) / 100;
         }
-        else if (ti->left_lost[r] && ti->right_lost[r])
+        else if (ti->left_lost[tr] && ti->right_lost[tr])
         {
             w = (w * STEER_W_BOTH_LOST_PCT) / 100;
         }
-        else if (ti->left_lost[r] || ti->right_lost[r])
+        else if (ti->left_lost[tr] || ti->right_lost[tr])
         {
             w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
         }
-        acc   += w * ((int16_t)ti->mid[r] - IMG_CENTER);
+        acc   += w * ((int16_t)ti->mid[tr] - IMG_CENTER);
         w_sum += w;
     }
     if (w_sum == 0) return 0;
@@ -711,7 +758,9 @@ uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
     /* 远端连续双丢行是八邻域搜索未到达的区域（左右搜索未相遇时
        hightest_row 保持 0，未搜索行保持初始化的极值边界），不代表
        车已冲出赛道，不计入失效统计 */
-    while (rows > 0u && ti->left_lost[rows - 1u] && ti->right_lost[rows - 1u])
+    while (rows > 0u &&
+           ti->left_lost[(uint8_t)(TR_ROW(EIGHTN_START_ROW) + rows - 1u)] &&
+           ti->right_lost[(uint8_t)(TR_ROW(EIGHTN_START_ROW) + rows - 1u)])
     {
         rows--;
         lost--;

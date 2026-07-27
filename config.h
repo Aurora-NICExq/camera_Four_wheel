@@ -32,6 +32,10 @@
 #define EIGHTN_CROSS_SLOPE_NEAR  (5)
 #define EIGHTN_CROSS_CORNER_L    (4)
 #define EIGHTN_CROSS_CORNER_R    (IMG_W - 4)
+#define EIGHTN_EDGE_LOST_MARGIN  (2)          /* 边界贴到图像黑框(±2px)视作丢线:沿框爬行的链条不含中线信息 */
+#define EIGHTN_CROSS_BREAK_DROW  (15)         /* 十字左右上拐点行号最大允许偏差 */
+#define EIGHTN_CROSS_OPEN_WIDTH  (140)        /* 十字开口判定最小宽度(像素) */
+#define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8) /* 开口采样最近行:再近的行正常赛道也接近全宽,不作依据 */
 
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
@@ -60,6 +64,12 @@
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
+
+/* 有效行数限速(master cap_rows 通道):入弯口视野塌缩早于近端误差出现,
+ * 按可见行数封顶目标占空比;直道确认加速同样受此上限约束 */
+#define ROWS_CAP_TABLE_LEN (5)
+#define ROWS_CAP_BINS {25, 45, 65, 85, 105}
+#define ROWS_CAP_DUTY {1800, 2200, 2600, 3200, DUTY_HARD_CAP}
 
 #define FAILSAFE_MIN_ROWS (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)
