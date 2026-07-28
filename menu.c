@@ -4,6 +4,10 @@
 #include "control.h"
 #include "motor.h"
 
+extern volatile float    steer_kp_max;
+extern volatile uint16_t curve_duty;
+extern volatile uint16_t straight_duty;
+
 #define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
 #define VALUE_WIDTH   (MENU_COLS - VALUE_COL)
@@ -198,6 +202,18 @@ void menu_action_defaults(void)
 {
     apply_defaults();
     draw_title("Defaults");
+    redraw_visible_values();
+}
+
+/* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再覆盖四项 */
+void menu_action_race_preset(void)
+{
+    apply_defaults();
+    steer_kp_max    = PRESET_KP_MAX;
+    curve_duty      = PRESET_CURVE_DUTY;
+    straight_duty   = PRESET_STR_DUTY;
+    drive_duty_base = PRESET_DUTY;
+    draw_title("Race Preset");
     redraw_visible_values();
 }
 

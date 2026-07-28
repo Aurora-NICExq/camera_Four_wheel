@@ -38,6 +38,7 @@ void menu_init(void);   // CPU0 上调一次：显示 + 按键 + 默认参数
 void menu_task(void);   // 主循环每帧调用；非阻塞
 
 void menu_action_defaults(void);
+void menu_action_race_preset(void);
 void menu_action_camera(void);
 void menu_action_align_test(void);
 void menu_action_motor_test(void);

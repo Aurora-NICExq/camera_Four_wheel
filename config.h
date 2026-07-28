@@ -87,4 +87,11 @@
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
+/* Race Preset:实测验证可行的一组参数,菜单一键切换
+ * (先恢复全部默认,再覆盖以下四项,保证进入的是完整的已验证状态) */
+#define PRESET_KP_MAX     (10.18f)
+#define PRESET_CURVE_DUTY (2700)
+#define PRESET_STR_DUTY   (3700)
+#define PRESET_DUTY       (3400)
+
 #endif /* CONFIG_H */

@@ -29,6 +29,7 @@ const menu_item_t menu_items[] = {
     MENU_U16("Duty",        drive_duty_base,    0,    DUTY_HARD_CAP, 100, STRAIGHT_DUTY),
     MENU_I16("St Judge",    straight_judge,     1,    30,    1,     STRAIGHT_JUDGE),
     MENU_U16("Stop Time",   drive_stop_time_s,  1,    600,   1,     DRIVE_ARMED_TIMEOUT_S),
+    MENU_ACTION("Race Preset",  menu_action_race_preset),
     MENU_ACTION("Reset",        menu_action_reset),
     MENU_ACTION("Camera",       menu_action_camera),
     MENU_ACTION("Align Test",   menu_action_align_test),
