@@ -1,12 +1,10 @@
-/* control.c - gain-scheduled PD steer + curve speed schedule */
+/* control.c - PD steer + curve speed schedule */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
 #include "control.h"
 
-volatile float   steer_kp_min       = KP_MIN;
-volatile float   steer_kp_max       = KP_MAX;
-volatile float   steer_kp_e_sat     = KP_E_SAT;
+volatile float   steer_kp           = KP;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
 volatile uint16_t curve_duty       = CURVE_DUTY;
@@ -197,13 +195,8 @@ void control_update(const track_info_t *ti, control_out_t *out)
     g_prev_error = error;
     g_d_filt += steer_d_filt_alpha * (d_raw - g_d_filt);
 
-    float e_abs = (error >= 0) ? (float)error : (float)(-error);
-    float ratio = e_abs / steer_kp_e_sat;
-    if (ratio > 1.0f) ratio = 1.0f;
-    float kp = steer_kp_min + (steer_kp_max - steer_kp_min) * ratio * ratio;
-
     int32_t servo_raw = SERVO_CENTER
-                      + (int32_t)(SERVO_DIR * (kp * (float)error + steer_kd * g_d_filt));
+                      + (int32_t)(SERVO_DIR * (steer_kp * (float)error + steer_kd * g_d_filt));
 
     out->servo_pwm = control_servo_clamp(servo_raw);
 
