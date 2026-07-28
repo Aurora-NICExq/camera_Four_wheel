@@ -11,6 +11,7 @@ volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
 volatile uint16_t curve_duty       = CURVE_DUTY;
 volatile uint16_t straight_duty    = STRAIGHT_MAX_DUTY;
+volatile uint16_t curve_temp_div    = CURVE_TEMP_DIV;
 volatile int16_t straight_judge     = STRAIGHT_JUDGE;
 volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
 volatile uint8_t  drive_armed       = 0;
@@ -24,6 +25,7 @@ static float    g_d_filt;
 static uint16_t g_duty_now;
 static uint8_t  g_slow_motor;
 static uint8_t  g_exit_cnt;
+static float    g_temp_hold;
 
 static int16_t iabs16(int16_t v)
 {
@@ -122,28 +124,108 @@ static uint8_t straight_flag_judge(const track_info_t *ti)
     return 0u;
 }
 
-/* temp = |mid远 - mid近| / CURVE_TEMP_DIV，上限 1 */
-static float curve_temp(const track_info_t *ti)
+/* 采样窗内中线均值,跳过双边丢线行。
+   空间平均只用同一帧的多行数据,降噪但不引入任何时间延迟 */
+static uint8_t mid_window_avg(const track_info_t *ti, int16_t center, int16_t *out)
 {
-    uint8_t near_r;
-    uint8_t far_r;
-    int16_t diff;
+    int16_t lo = (int16_t)(center - CURV_HALF_WIN);
+    int16_t hi = (int16_t)(center + CURV_HALF_WIN);
+    int16_t r;
+    int32_t sum = 0;
+    uint8_t n = 0;
+
+    if (lo < 1) lo = 1;
+    if (hi > (int16_t)ti->valid_rows) hi = (int16_t)ti->valid_rows;
+
+    for (r = lo; r <= hi; r++)
+    {
+        uint8_t tr = (uint8_t)r;
+        if (ti->left_lost[tr] && ti->right_lost[tr])
+        {
+            continue; /* 双边丢线行的 mid 是初始化的假居中值 */
+        }
+        sum += (int32_t)ti->mid[tr];
+        n++;
+    }
+    if (n < CURV_MIN_SAMPLES)
+    {
+        return 0u;
+    }
+    *out = (int16_t)(sum / (int32_t)n);
+    return 1u;
+}
+
+/* 真曲率:中线二阶差分 / 采样间距²。
+   对任意倾斜的直线恒为 0(车身偏航不再被误判成弯道),
+   除以间距² 后读数与视野长短无关 */
+static int16_t track_curvature(const track_info_t *ti, uint8_t *ok)
+{
+    int16_t base = (int16_t)track_near_row();
+    int16_t lo;
+    int16_t hi;
+    int16_t h;
+    int16_t v_near;
+    int16_t v_mid;
+    int16_t v_far;
+    int32_t d2;
+
+    *ok = 0u;
+    if (ti->valid_rows < (uint8_t)(CURV_ROW_NEAR + CURV_HALF_WIN + 2 * CURV_MIN_SPAN))
+    {
+        return 0;
+    }
+
+    lo = (int16_t)(base + CURV_ROW_NEAR);
+    hi = (int16_t)(base + (int16_t)ti->valid_rows - 1 - CURV_HALF_WIN);
+    h  = (int16_t)((hi - lo) / 2);
+    if (h < CURV_MIN_SPAN)
+    {
+        return 0;
+    }
+
+    if (!mid_window_avg(ti, lo, &v_near) ||
+        !mid_window_avg(ti, (int16_t)(lo + h), &v_mid) ||
+        !mid_window_avg(ti, (int16_t)(lo + 2 * h), &v_far))
+    {
+        return 0;
+    }
+
+    *ok = 1u;
+    d2 = (int32_t)v_far - 2 * (int32_t)v_mid + (int32_t)v_near;
+    return (int16_t)((d2 * CURV_SCALE) / ((int32_t)h * (int32_t)h));
+}
+
+/* temp = |曲率| / Curv Div,上限 1;非对称保持:升立即、降缓慢 */
+static float curve_temp(const track_info_t *ti, int16_t *curv_out)
+{
+    uint8_t ok;
+    int16_t curv = track_curvature(ti, &ok);
     float temp;
 
-    if (ti->valid_rows < 2u)
+    *curv_out = ok ? curv : 0;
+
+    if (!ok)
     {
-        return 1.0f;
+        temp = 1.0f; /* 看不清前方就按最保守处理,直接给弯道速度 */
+    }
+    else
+    {
+        uint16_t div = curve_temp_div;
+        if (div == 0u) div = 1u;
+        temp = (float)iabs16(curv) / (float)div;
+        if (temp > 1.0f) temp = 1.0f;
     }
 
-    near_r = track_near_row();
-    far_r  = track_far_row(ti);
-    diff   = (int16_t)ti->mid[far_r] - (int16_t)ti->mid[near_r];
-    temp   = (float)iabs16(diff) / (float)CURVE_TEMP_DIV;
-    if (temp > 1.0f)
+    /* 弯度上升立即生效,下降缓慢回落:S 弯与复合弯的中间段不会误加速 */
+    if (temp > g_temp_hold)
     {
-        temp = 1.0f;
+        g_temp_hold = temp;
     }
-    return temp;
+    else
+    {
+        g_temp_hold += CURVE_TEMP_FALL * (temp - g_temp_hold);
+    }
+    return g_temp_hold;
 }
 
 /* 有效行数限速(master cap_rows 通道):入弯口视野塌缩早于近端误差出现,
@@ -171,6 +253,7 @@ void control_init(void)
     g_duty_now   = 0;
     g_slow_motor = 1u;
     g_exit_cnt   = 0;
+    g_temp_hold  = 0.0f;
 }
 
 void control_reset(void)
@@ -190,6 +273,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     int16_t error = ti->error;
     float speed_f;
     float temp;
+    int16_t curv;
     uint16_t target;
     uint8_t straight;
 
@@ -208,7 +292,9 @@ void control_update(const track_info_t *ti, control_out_t *out)
     out->servo_pwm = control_servo_clamp(servo_raw);
 
     straight = straight_flag_judge(ti);
-    temp     = curve_temp(ti);
+    temp     = curve_temp(ti, &curv);
+    out->curv = curv;
+    out->temp_pct = (uint16_t)(temp * 100.0f);
 
     /* 出弯确认:误差连续收敛若干帧后才允许直道加速 */
     if (iabs16(error) <= EXIT_ERR_MAX && ti->valid_rows >= EXIT_ROWS_MIN &&
