@@ -12,7 +12,7 @@
  * 计时起点 = arm 后第一个有效帧;2s 内整车静止(舵机保持回中),之后软启动发车;
  * 发车后跑满菜单 Stop Time 秒锁存停车,Armed 行显示 TMO,重新 OFF→ON 复位 */
 #define DRIVE_LAUNCH_DELAY_S (2)
-#define DRIVE_ARMED_TIMEOUT_S (25) /* 菜单 Stop Time 默认值(秒) */
+#define DRIVE_ARMED_TIMEOUT_S (30) /* 菜单 Stop Time 默认值(秒) */
 #define DRIVE_LAUNCH_DELAY_US ((uint32_t)DRIVE_LAUNCH_DELAY_S * 1000000u)
 /* 计时不依赖时间戳单调:逐帧累计 dt,单帧差值异常(定时器回绕/毛刺)
  * 时按名义帧周期累计,避免回绕导致的瞬间误超时 */
@@ -52,18 +52,18 @@
 #define SERVO_DIR (-1)
 
 #define KP_MIN (1.09f)
-#define KP_MAX (9.48f)
-#define KP_E_SAT (45.0f) /* 35→45:出口 15~22px 摆动段退出饱和,D 恢复阻尼窗口;弯道误差 ≥25px 仍满舵 */
-#define KD (2.5f)        /* 脱饱和后 D 才有效;以直道安静、出口一次收敛不过冲为准微调 */
+#define KP_MAX (3.08f)   /* 实测:与 Kp Min 拉近(<3×),压平二次曲线拆掉"软中心+陡拐点"极限环 */
+#define KP_E_SAT (13.0f) /* >13px 即到顶,增益近似恒定;满舵门槛 ≈ 76/3.08 ≈ 25px */
+#define KD (1.49f)
 #define D_FILT_ALPHA (0.4f)
 
-#define STRAIGHT_DUTY (2500) /* 基准占空比 25%（满量程 10000） */
+#define STRAIGHT_DUTY (2900) /* 基准占空比(菜单 Duty 默认值,满量程 10000) */
 #define DUTY_HARD_CAP (6000)
 
 /* 曲率速度调度:急弯目标为绝对值 Curve Duty,不随 Duty 上浮:
  * target = Duty - (Duty - CurveDuty)×temp;直道确认(且行数足够)只增不减 = Str Duty */
-#define CURVE_DUTY (2000)        /* 急弯(temp=1)绝对目标占空比 20% */
-#define STRAIGHT_MAX_DUTY (3200) /* 直道确认目标占空比 32% */
+#define CURVE_DUTY (2400)        /* 急弯(temp=1)绝对目标占空比 */
+#define STRAIGHT_MAX_DUTY (3700) /* 直道确认目标占空比 */
 #define STRAIGHT_MIN_ROWS (80)   /* 直道确认所需最少有效行,视野变短即提前退出加速 */
 
 /* 出弯确认门(master exit gate 精简版):出弯后误差连续收敛 N 帧
@@ -104,9 +104,9 @@
 
 /* Race Preset:实测验证可行的一组参数,菜单一键切换
  * (先恢复全部默认,再覆盖以下四项,保证进入的是完整的已验证状态) */
-#define PRESET_KP_MAX     (10.18f)
-#define PRESET_CURVE_DUTY (2700)
+#define PRESET_KP_MAX     (3.08f)
+#define PRESET_CURVE_DUTY (2400)
 #define PRESET_STR_DUTY   (3700)
-#define PRESET_DUTY       (3400)
+#define PRESET_DUTY       (2900)
 
 #endif /* CONFIG_H */
