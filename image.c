@@ -4,12 +4,14 @@
 #include "image.h"
 
 volatile int16_t image_threshold = 0;
+volatile uint8_t image_cross_fill = 1;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
 #define IMG_DBG_LEFT  (80u)   /* 调试叠加灰度:左边线 */
 #define IMG_DBG_RIGHT (160u)  /* 右边线 */
 #define IMG_DBG_MID   (220u)  /* 中线 */
+#define IMG_DBG_FILL  (120u)  /* 十字补线行的边线:与实测边线区分,便于肉眼核对补线质量 */
 #define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
 
 static uint8_t  image_bin[IMG_H][IMG_W];
@@ -19,18 +21,42 @@ static uint8_t  r_border[IMG_H];
 static uint16_t points_l[EIGHTN_MAX_POINTS][2];
 static uint16_t points_r[EIGHTN_MAX_POINTS][2];
 static uint16_t dir_l[EIGHTN_MAX_POINTS];
+static uint16_t dir_r[EIGHTN_MAX_POINTS];
 
 static uint8_t  start_point_l[2];
 static uint8_t  start_point_r[2];
 static uint16_t data_stastics_l;
 static uint16_t data_stastics_r;
 static uint8_t  hightest_row;
+static uint8_t  cross_break_l;
+static uint8_t  cross_break_r;
+static uint8_t  cross_flag;
 static int16_t  g_err_hold;
 static uint8_t  g_hold_frames;
 
 static int my_abs(int v)
 {
     return (v >= 0) ? v : -v;
+}
+
+static int16_t limit_a_b(int16_t x, int16_t a, int16_t b)
+{
+    if (x < a) return a;
+    if (x > b) return b;
+    return x;
+}
+
+static void init_cross_meta(track_info_t *ti)
+{
+    uint8_t r;
+    ti->cross_valid = 0;
+    ti->cross_lo = 0;
+    ti->cross_hi = 0;
+    ti->inflect_row = 0xFF;
+    for (r = 0; r < IMG_H; r++)
+    {
+        ti->cross_filled[r] = 0;
+    }
 }
 
 static uint8_t clamp_u8(int32_t v, int32_t lo, int32_t hi)
@@ -316,6 +342,7 @@ static void search_l_r(uint16_t break_flag,
             {
                 temp_r[index_r][0] = search_filds_r[i][0];
                 temp_r[index_r][1] = search_filds_r[i][1];
+                dir_r[r_data_statics - 1] = i;
                 index_r++;
             }
 
@@ -397,6 +424,203 @@ static void get_right(uint16_t total_r)
     }
 }
 
+static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
+{
+    float xsum = 0.0f;
+    float ysum = 0.0f;
+    float xysum = 0.0f;
+    float x2sum = 0.0f;
+    int16_t i;
+    float result = 0.0f;
+
+    for (i = (int16_t)begin; i < (int16_t)end; i++)
+    {
+        xsum  += (float)i;
+        ysum  += (float)border[i];
+        xysum += (float)i * (float)border[i];
+        x2sum += (float)i * (float)i;
+    }
+
+    {
+        float denom = ((float)(end - begin) * x2sum - xsum * xsum);
+        if (denom != 0.0f)
+        {
+            result = (((float)(end - begin) * xysum - xsum * ysum) / denom);
+        }
+    }
+    return result;
+}
+
+static void calculate_s_i(uint8_t start, uint8_t end, const uint8_t *border,
+                          float *slope_rate, float *intercept)
+{
+    uint16_t i;
+    uint16_t num = 0;
+    float x_average;
+    float y_average;
+    uint32_t xsum = 0;
+    uint32_t ysum = 0;
+
+    for (i = start; i < end; i++)
+    {
+        xsum += i;
+        ysum += border[i];
+        num++;
+    }
+
+    if (num)
+    {
+        x_average = (float)xsum / (float)num;
+        y_average = (float)ysum / (float)num;
+    }
+    else
+    {
+        x_average = 0.0f;
+        y_average = 0.0f;
+    }
+
+    *slope_rate = slope_calculate(start, end, border);
+    *intercept = y_average - (*slope_rate) * x_average;
+}
+
+static void mark_cross_fill_rows(uint8_t y_lo, uint8_t y_hi, track_info_t *ti)
+{
+    uint8_t a1 = y_lo;
+    uint8_t a2 = y_hi;
+    uint8_t i;
+
+    if (a1 > a2)
+    {
+        uint8_t t = a1;
+        a1 = a2;
+        a2 = t;
+    }
+
+    for (i = a1; i <= a2; i++)
+    {
+        uint8_t tr = TR_ROW(i);
+        if (tr < IMG_H)
+        {
+            ti->cross_filled[tr] = 1;
+        }
+    }
+
+    if (ti->cross_lo == 0 && ti->cross_hi == 0)
+    {
+        ti->cross_lo = TR_ROW(a2);
+        ti->cross_hi = (uint8_t)(TR_ROW(a1) + 1u);
+    }
+}
+
+static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti)
+{
+    uint16_t i;
+    uint8_t start;
+    uint8_t end;
+    float slope_rate = 0.0f;
+    float intercept = 0.0f;
+    uint8_t fill_from;
+
+    cross_break_l = 0;
+    cross_break_r = 0;
+    cross_flag = 0;
+
+    for (i = 1; i + 7u < data_stastics_l; i++)
+    {
+        if (dir_l[i - 1] == 4 && dir_l[i] == 4 &&
+            dir_l[i + 3] == 6 && dir_l[i + 5] == 6 && dir_l[i + 7] == 6)
+        {
+            cross_break_l = (uint8_t)points_l[i][1];
+            break;
+        }
+    }
+
+    for (i = 1; i + 7u < data_stastics_r; i++)
+    {
+        if (dir_r[i - 1] == 4 && dir_r[i] == 4 &&
+            dir_r[i + 3] == 6 && dir_r[i + 5] == 6 && dir_r[i + 7] == 6)
+        {
+            cross_break_r = (uint8_t)points_r[i][1];
+            break;
+        }
+    }
+
+    if (!cross_break_l || !cross_break_r)
+    {
+        return;
+    }
+
+    if (!bin[IMG_H - 1][EIGHTN_CROSS_CORNER_L] ||
+        !bin[IMG_H - 1][EIGHTN_CROSS_CORNER_R])
+    {
+        return;
+    }
+
+    /* 拟合窗口需完整落在图像内(break-SLOPE_BACK 不得下溢,否则越界拟合) */
+    if (cross_break_l <= EIGHTN_CROSS_SLOPE_BACK ||
+        cross_break_r <= EIGHTN_CROSS_SLOPE_BACK)
+    {
+        return;
+    }
+
+    /* 真十字:左右上拐点行号接近,且拐点下方开口接近全宽。
+       弯道拐点同样能凑出 4,4,6,6,6 方向序列,但内侧边界仍在、宽度不足,
+       误补线会把弯道中线拉直、掏空转向误差 */
+    if (my_abs((int)cross_break_l - (int)cross_break_r) > EIGHTN_CROSS_BREAK_DROW)
+    {
+        return;
+    }
+    {
+        uint8_t base = (cross_break_l > cross_break_r) ? cross_break_l : cross_break_r;
+        uint16_t row;
+        uint8_t samples = 0;
+        uint8_t open_cnt = 0;
+        for (row = (uint16_t)base + 2u;
+             row < (uint16_t)base + 12u && row <= (uint16_t)EIGHTN_CROSS_OPEN_ROW_MAX;
+             row++)
+        {
+            samples++;
+            if (((int16_t)r_border[row] - (int16_t)l_border[row]) >= EIGHTN_CROSS_OPEN_WIDTH)
+            {
+                open_cnt++;
+            }
+        }
+        if (samples >= 4u && ((uint16_t)open_cnt * 3u) < ((uint16_t)samples * 2u))
+        {
+            return;
+        }
+    }
+
+    cross_flag = 1;
+    fill_from = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
+
+    start = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_BACK);
+    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
+    end = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
+    calculate_s_i(start, end, l_border, &slope_rate, &intercept);
+    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
+    {
+        int16_t v = (int16_t)(slope_rate * (float)i + intercept);
+        l_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
+        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
+    }
+
+    start = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_BACK);
+    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
+    end = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
+    calculate_s_i(start, end, r_border, &slope_rate, &intercept);
+    fill_from = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
+    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
+    {
+        int16_t v = (int16_t)(slope_rate * (float)i + intercept);
+        r_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
+        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
+    }
+
+    ti->cross_valid = 1;
+    ti->inflect_row = TR_ROW(cross_break_l);
+}
+
 static void export_track(track_info_t *ti, uint8_t hightest)
 {
     uint8_t ir;
@@ -476,11 +700,15 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         int32_t w = (int32_t)w_low[band] * (int32_t)(256u - k)
                   + (int32_t)w_high[band] * (int32_t)k;
 
-        if (ti->left_lost[tr] && ti->right_lost[tr])
+        if (ti->cross_filled[tr])
+        {
+            w = (w * STEER_W_CROSS_FILL_PCT) / 100;
+        }
+        else if (ti->left_lost[tr] && ti->right_lost[tr])
         {
             continue; /* 双边丢线行没有中线信息,不投假居中票 */
         }
-        if (ti->left_lost[tr] || ti->right_lost[tr])
+        else if (ti->left_lost[tr] || ti->right_lost[tr])
         {
             w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
         }
@@ -512,6 +740,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 {
     uint8_t th;
 
+    init_cross_meta(out);
+    cross_flag = 0;
     hightest_row = 0;
     data_stastics_l = 0;
     data_stastics_r = 0;
@@ -532,6 +762,10 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
                    &hightest_row);
         get_left(data_stastics_l);
         get_right(data_stastics_r);
+        if (image_cross_fill)
+        {
+            cross_fill(image_bin, out);
+        }
         export_track(out, hightest_row);
     }
     else
@@ -553,13 +787,14 @@ const uint8_t *image_debug_frame(const track_info_t *ti)
     for (tr = 1u; tr <= ti->valid_rows && tr < IMG_H; tr++)
     {
         uint8_t ir = (uint8_t)(IMG_H - 1u - tr);
+        uint8_t filled = ti->cross_filled[tr];
         if (!ti->left_lost[tr])
         {
-            image_bin[ir][ti->left[tr]] = IMG_DBG_LEFT;
+            image_bin[ir][ti->left[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_LEFT;
         }
         if (!ti->right_lost[tr])
         {
-            image_bin[ir][ti->right[tr]] = IMG_DBG_RIGHT;
+            image_bin[ir][ti->right[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_RIGHT;
         }
         if (!ti->left_lost[tr] && !ti->right_lost[tr])
         {

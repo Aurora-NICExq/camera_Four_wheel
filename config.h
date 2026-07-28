@@ -30,6 +30,7 @@
 #define STEER_WEIGHTS_LOWSPEED {8, 10, 9, 6, 4, 2, 1, 0}
 #define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
 #define STEER_W_SINGLE_EDGE_PCT (50)
+#define STEER_W_CROSS_FILL_PCT (70) /* 十字补线行降权:补出的边界是外推值,不如实测边线可信 */
 /* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
  * 有效权重塌陷(视野基本全是开口)时沿用进入盲区前的误差,
  * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
@@ -44,6 +45,15 @@
 #define EIGHTN_FILTER_SUM_MIN (255 * 2)
 #define EIGHTN_MEET_DIST (2)
 #define EIGHTN_EDGE_LOST_MARGIN  (2)          /* 边界贴到图像黑框(±2px)视作丢线:沿框爬行的链条不含中线信息 */
+
+/* 十字补线:菜单 Cross Fill 开关控制,便于开/关背靠背对比 */
+#define EIGHTN_CROSS_SLOPE_BACK (15)
+#define EIGHTN_CROSS_SLOPE_NEAR  (5)
+#define EIGHTN_CROSS_CORNER_L    (4)
+#define EIGHTN_CROSS_CORNER_R    (IMG_W - 4)
+#define EIGHTN_CROSS_BREAK_DROW  (15)         /* 十字左右上拐点行号最大允许偏差 */
+#define EIGHTN_CROSS_OPEN_WIDTH  (140)        /* 十字开口判定最小宽度(像素) */
+#define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8) /* 开口采样最近行:再近的行正常赛道也接近全宽,不作依据 */
 
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
