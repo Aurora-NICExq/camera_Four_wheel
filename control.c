@@ -272,4 +272,5 @@ void control_update(const track_info_t *ti, control_out_t *out)
 
     out->duty       = g_duty_now;
     out->error_used = error;
+    out->straight   = straight;
 }

@@ -12,6 +12,7 @@ typedef struct
     uint16_t duty;
     int16_t  error_used;
     uint16_t duty_target;
+    uint8_t  straight;   /* 本帧直道确认结果,供调试显示 */
 } control_out_t;
 
 extern volatile uint8_t  drive_armed;

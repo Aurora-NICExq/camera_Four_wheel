@@ -24,6 +24,9 @@ extern volatile int16_t image_threshold;
 
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
 
+/* 调试显示:二值图叠加边线/中线,纯显示不参与控制 */
+const uint8_t *image_debug_frame(const track_info_t *ti);
+
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe);
 
 #endif /* IMAGE_H */
