@@ -4,7 +4,7 @@
 #include "control.h"
 #include "motor.h"
 
-extern volatile float    steer_kp;
+extern volatile float    steer_kp_max;
 extern volatile uint16_t curve_duty;
 extern volatile uint16_t straight_duty;
 
@@ -209,7 +209,7 @@ void menu_action_defaults(void)
 void menu_action_race_preset(void)
 {
     apply_defaults();
-    steer_kp        = PRESET_KP;
+    steer_kp_max    = PRESET_KP_MAX;
     curve_duty      = PRESET_CURVE_DUTY;
     straight_duty   = PRESET_STR_DUTY;
     drive_duty_base = PRESET_DUTY;

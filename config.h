@@ -65,10 +65,13 @@
 #define SERVO_MAX (781)
 #define SERVO_DIR (-1)
 
-/* 单套 PD:恒定比例增益,不再随误差调度。
- * 满舵门槛 = 舵机半行程/Kp = 76/3.08 ≈ 25px,弯道大误差照常满舵。
- * 调参只剩两个旋钮:Kp 管"转得够不够",Kd 管"这个速度配不配转" */
-#define KP (3.08f)
+/* 分段 PD:kp = Min + (Max-Min)×(|e|/ESat)²,把"直道小误差"与"弯道大误差"
+ * 解耦——直道靠 Min 稳、弯道靠 Max 转,不必用一个折中值同时应付两者。
+ * 注意 Max/Min 比值不宜超过 3~4 倍、ESat 不宜过小,否则拐点过陡会退化成
+ * "中心极软 + 突然满舵"的 bang-bang,重新引发饱和极限环 */
+#define KP_MIN (1.09f)
+#define KP_MAX (3.08f)
+#define KP_E_SAT (13.0f)
 #define KD (1.49f)
 #define D_FILT_ALPHA (0.4f)
 
@@ -121,7 +124,7 @@
 
 /* Race Preset:实测验证可行的一组参数,菜单一键切换
  * (先恢复全部默认,再覆盖以下四项,保证进入的是完整的已验证状态) */
-#define PRESET_KP         (3.08f)
+#define PRESET_KP_MAX     (3.08f)
 #define PRESET_CURVE_DUTY (2400)
 #define PRESET_STR_DUTY   (3700)
 #define PRESET_DUTY       (2900)

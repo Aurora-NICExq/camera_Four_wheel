@@ -2,7 +2,9 @@
 #include "menu.h"
 #include "config.h"
 
-extern volatile float   steer_kp;
+extern volatile float   steer_kp_min;
+extern volatile float   steer_kp_max;
+extern volatile float   steer_kp_e_sat;
 extern volatile float   steer_kd;
 extern volatile float   steer_d_filt_alpha;
 extern volatile uint16_t curve_duty;
@@ -18,7 +20,9 @@ extern volatile uint16_t drive_duty_base;
 
 const menu_item_t menu_items[] = {
     MENU_BOOL("Armed",      drive_armed,        0),
-    MENU_F32("Kp",           steer_kp,           0.0f, 20.0f, 0.1f,  KP),
+    MENU_F32("Kp Min",       steer_kp_min,       0.0f, 20.0f, 0.1f,  KP_MIN),
+    MENU_F32("Kp Max",       steer_kp_max,       0.0f, 20.0f, 0.1f,  KP_MAX),
+    MENU_F32("Kp E Sat",     steer_kp_e_sat,     5.0f, 80.0f, 1.0f,  KP_E_SAT),
     MENU_F32("Kd",           steer_kd,           0.0f, 30.0f, 0.1f,  KD),
     MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, D_FILT_ALPHA),
     MENU_U16("Curve Duty",   curve_duty,         0,    DUTY_HARD_CAP, 100, CURVE_DUTY),
