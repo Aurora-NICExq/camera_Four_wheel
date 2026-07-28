@@ -29,6 +29,10 @@
 #define STEER_W_BAND_ROWS (15)
 #define STEER_WEIGHTS_LOWSPEED {8, 10, 9, 6, 4, 2, 1, 0}
 #define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
+/* 前瞻归一化基准:占空比达到该值时权重完全切到高速(远端)表。
+ * 必须设成实际能跑到的顶速,设成 DUTY_HARD_CAP 会让远端表永远吃不满,
+ * 车始终"看半近半远"、等偏差出现才起手,峰值打角偏大 */
+#define STEER_W_DUTY_REF (3800)
 #define STEER_W_SINGLE_EDGE_PCT (50)
 #define STEER_W_CROSS_FILL_PCT (70) /* 十字补线行降权:补出的边界是外推值,不如实测边线可信 */
 /* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;

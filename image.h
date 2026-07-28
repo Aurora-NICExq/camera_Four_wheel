@@ -28,6 +28,7 @@ typedef struct
 
 extern volatile int16_t image_threshold;
 extern volatile uint8_t image_cross_fill;
+extern volatile uint16_t steer_w_duty_ref;
 
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
 

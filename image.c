@@ -5,6 +5,7 @@
 
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
+volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
@@ -683,7 +684,11 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     static const uint8_t w_low[STEER_W_BANDS]  = STEER_WEIGHTS_LOWSPEED;
     static const uint8_t w_high[STEER_W_BANDS] = STEER_WEIGHTS_HIGHSPEED;
 
-    uint32_t k = ((uint32_t)duty_now * 256u) / DUTY_HARD_CAP;
+    uint16_t ref = steer_w_duty_ref;
+    uint32_t k;
+
+    if (ref == 0u) ref = DUTY_HARD_CAP; /* 除零兜底 */
+    k = ((uint32_t)duty_now * 256u) / ref;
     if (k > 256u) k = 256u;
 
     int32_t acc = 0;
