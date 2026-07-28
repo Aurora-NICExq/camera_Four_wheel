@@ -59,16 +59,6 @@
 #define EIGHTN_CROSS_OPEN_WIDTH  (140)        /* 十字开口判定最小宽度(像素) */
 #define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8) /* 开口采样最近行:再近的行正常赛道也接近全宽,不作依据 */
 
-/* 电子差速:转向时外侧轮加速、内侧轮减速,对称分配保持总推力不变。
- * 收益有二:① 消掉内外轮路径差造成的纵向打滑,把被浪费的抓地力还给横向;
- *           ② 产生帮助车头转入弯道的横摆力矩,直接对抗推头。
- * 方向:舵机 PWM 低于中位 = 右转(SERVO_DIR=-1),此时左轮在外侧应加速。
- * 注意它等效于放大转向增益,开启后可能需要下调 Kp。
- * 仍为 IN1=duty / IN2=0,不改变 H 桥工作模式,对驱动板无额外风险。
- * 默认 0 = 关闭(未经实测验证的耦合特性,需手动开启);建议起步值 0.15 */
-#define DIFF_GAIN (0.0f)
-#define DIFF_DEADZONE (0.15f) /* |舵角|/满舵 低于此值不介入,直道摆动不被放大 */
-
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
 #define SERVO_MIN (629)
@@ -132,23 +122,57 @@
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
-/* Race Preset:实测验证稳定的一组参数,菜单一键切换。
- * 先 apply_defaults 全量恢复(含 Armed=OFF),再逐项覆盖为下列实测值——
- * 显式写全每一项,保证一键进入的是完整可复现的状态,不受默认值改动影响。
- * 本分支的速度调度与该组参数的验证环境一致(未含二阶差分曲率改动) */
-#define PRESET_KP_MIN     (0.89f)
-#define PRESET_KP_MAX     (1.68f)
-#define PRESET_KP_E_SAT   (13.0f)
-#define PRESET_KD         (3.08f)
-#define PRESET_D_ALPHA    (0.40f)
-#define PRESET_CURVE_DUTY (2600)
-#define PRESET_DIFF_GAIN  (0.0f) /* 实测组是在无差速下验证的,preset 保持关闭 */
-#define PRESET_STR_DUTY   (4000)
-#define PRESET_THRESHOLD  (0)
-#define PRESET_CROSS_FILL (1)
-#define PRESET_W_REF      (3800)
-#define PRESET_DUTY       (3100)
-#define PRESET_ST_JUDGE   (8)
-#define PRESET_STOP_TIME  (25)
+/* ---------------- Race Preset:低/中/高三档 ----------------
+ * 菜单 Race Preset 进入子页面选择档位,ENTER 应用。
+ * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
+ * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
+
+/* 低速档:实测可完赛的稳定组。
+ * 注意 Curve Duty(2700) == Duty(2700) 且 Str Duty(2500) < Duty,
+ * 曲率削速与直道加速都不会生效 —— 全程恒速 2700,
+ * 这正是"以完赛为目标"的保守配置,不是参数填错 */
+#define PRESET_LOW_KP_MIN     (0.79f)
+#define PRESET_LOW_KP_MAX     (1.67f)
+#define PRESET_LOW_KP_E_SAT   (10.0f)
+#define PRESET_LOW_KD         (4.66f)
+#define PRESET_LOW_D_ALPHA    (0.40f)
+#define PRESET_LOW_CURVE_DUTY (2700)
+#define PRESET_LOW_STR_DUTY   (2500)
+#define PRESET_LOW_THRESHOLD  (0)
+#define PRESET_LOW_CROSS_FILL (1)
+#define PRESET_LOW_W_REF      (5700)
+#define PRESET_LOW_DUTY       (2700)
+#define PRESET_LOW_ST_JUDGE   (8)
+#define PRESET_LOW_STOP_TIME  (30)
+
+/* 中速档:占位,尚未实测。当前取代码默认值,按下即进入未验证状态 */
+#define PRESET_MID_KP_MIN     (KP_MIN)
+#define PRESET_MID_KP_MAX     (KP_MAX)
+#define PRESET_MID_KP_E_SAT   (KP_E_SAT)
+#define PRESET_MID_KD         (KD)
+#define PRESET_MID_D_ALPHA    (D_FILT_ALPHA)
+#define PRESET_MID_CURVE_DUTY (CURVE_DUTY)
+#define PRESET_MID_STR_DUTY   (STRAIGHT_MAX_DUTY)
+#define PRESET_MID_THRESHOLD  (0)
+#define PRESET_MID_CROSS_FILL (1)
+#define PRESET_MID_W_REF      (STEER_W_DUTY_REF)
+#define PRESET_MID_DUTY       (STRAIGHT_DUTY)
+#define PRESET_MID_ST_JUDGE   (STRAIGHT_JUDGE)
+#define PRESET_MID_STOP_TIME  (DRIVE_ARMED_TIMEOUT_S)
+
+/* 高速档:占位,尚未实测。当前同为代码默认值 */
+#define PRESET_HIGH_KP_MIN     (KP_MIN)
+#define PRESET_HIGH_KP_MAX     (KP_MAX)
+#define PRESET_HIGH_KP_E_SAT   (KP_E_SAT)
+#define PRESET_HIGH_KD         (KD)
+#define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)
+#define PRESET_HIGH_CURVE_DUTY (CURVE_DUTY)
+#define PRESET_HIGH_STR_DUTY   (STRAIGHT_MAX_DUTY)
+#define PRESET_HIGH_THRESHOLD  (0)
+#define PRESET_HIGH_CROSS_FILL (1)
+#define PRESET_HIGH_W_REF      (STEER_W_DUTY_REF)
+#define PRESET_HIGH_DUTY       (STRAIGHT_DUTY)
+#define PRESET_HIGH_ST_JUDGE   (STRAIGHT_JUDGE)
+#define PRESET_HIGH_STOP_TIME  (DRIVE_ARMED_TIMEOUT_S)
 
 #endif /* CONFIG_H */

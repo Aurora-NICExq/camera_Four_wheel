@@ -26,12 +26,53 @@ extern volatile uint16_t steer_w_duty_ref;
 #define FINE_MIN_FLOAT (0.01f)                  // 浮点最小步长(与 2 位小数显示精度对齐)
 #define FINE_MIN_INT   (1.0f)                   // 整型最小步长:再小会被取整吃掉,按键像失灵
 
-typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
+typedef enum { NAV_LIST, NAV_EDIT, NAV_PRESET } nav_state_e;
+
+/* 三档预设。一次写全每一项:未列出的项由 apply_defaults 兜底,
+   保证选中任一档进入的都是完整、可复现的状态 */
+#define PRESET_COUNT (3)
+
+typedef struct
+{
+    const char *name;
+    float    kp_min;
+    float    kp_max;
+    float    kp_e_sat;
+    float    kd;
+    float    d_alpha;
+    uint16_t curve_duty;
+    uint16_t str_duty;
+    int16_t  threshold;
+    uint8_t  cross_fill;
+    uint16_t w_ref;
+    uint16_t duty;
+    int16_t  st_judge;
+    uint16_t stop_time;
+} preset_t;
+
+static const preset_t s_presets[PRESET_COUNT] = {
+    { "Low  (tested)",
+      PRESET_LOW_KP_MIN, PRESET_LOW_KP_MAX, PRESET_LOW_KP_E_SAT, PRESET_LOW_KD,
+      PRESET_LOW_D_ALPHA, PRESET_LOW_CURVE_DUTY,
+      PRESET_LOW_STR_DUTY, PRESET_LOW_THRESHOLD, PRESET_LOW_CROSS_FILL,
+      PRESET_LOW_W_REF, PRESET_LOW_DUTY, PRESET_LOW_ST_JUDGE, PRESET_LOW_STOP_TIME },
+    { "Mid  (TODO)",
+      PRESET_MID_KP_MIN, PRESET_MID_KP_MAX, PRESET_MID_KP_E_SAT, PRESET_MID_KD,
+      PRESET_MID_D_ALPHA, PRESET_MID_CURVE_DUTY,
+      PRESET_MID_STR_DUTY, PRESET_MID_THRESHOLD, PRESET_MID_CROSS_FILL,
+      PRESET_MID_W_REF, PRESET_MID_DUTY, PRESET_MID_ST_JUDGE, PRESET_MID_STOP_TIME },
+    { "High (TODO)",
+      PRESET_HIGH_KP_MIN, PRESET_HIGH_KP_MAX, PRESET_HIGH_KP_E_SAT, PRESET_HIGH_KD,
+      PRESET_HIGH_D_ALPHA, PRESET_HIGH_CURVE_DUTY,
+      PRESET_HIGH_STR_DUTY, PRESET_HIGH_THRESHOLD, PRESET_HIGH_CROSS_FILL,
+      PRESET_HIGH_W_REF, PRESET_HIGH_DUTY, PRESET_HIGH_ST_JUDGE, PRESET_HIGH_STOP_TIME },
+};
 
 static nav_state_e       s_nav;
 static uint8_t           s_camera_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
+static uint8_t           s_preset_cursor;       // 预设子页面选中档位
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
 static float             s_edit_val;            // 编辑工作副本
@@ -230,25 +271,56 @@ void menu_action_defaults(void)
 }
 
 /* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再逐项覆盖 */
-void menu_action_race_preset(void)
+/* 应用一档预设:先全量恢复默认(含 Armed=OFF、Fine Step=OFF),再逐项覆盖,
+   保证进入的是完整可复现的状态,不受此前手动改动残留影响 */
+static void apply_preset(const preset_t *p)
 {
     apply_defaults();
-    steer_kp_min       = PRESET_KP_MIN;
-    steer_kp_max       = PRESET_KP_MAX;
-    steer_kp_e_sat     = PRESET_KP_E_SAT;
-    steer_kd           = PRESET_KD;
-    steer_d_filt_alpha = PRESET_D_ALPHA;
-    curve_duty         = PRESET_CURVE_DUTY;
-    diff_gain          = PRESET_DIFF_GAIN;
-    straight_duty      = PRESET_STR_DUTY;
-    image_threshold    = PRESET_THRESHOLD;
-    image_cross_fill   = PRESET_CROSS_FILL;
-    steer_w_duty_ref   = PRESET_W_REF;
-    drive_duty_base    = PRESET_DUTY;
-    straight_judge     = PRESET_ST_JUDGE;
-    drive_stop_time_s  = PRESET_STOP_TIME;
-    draw_title("Race Preset");
-    redraw_visible_values();
+    steer_kp_min       = p->kp_min;
+    steer_kp_max       = p->kp_max;
+    steer_kp_e_sat     = p->kp_e_sat;
+    steer_kd           = p->kd;
+    steer_d_filt_alpha = p->d_alpha;
+    curve_duty         = p->curve_duty;
+    straight_duty      = p->str_duty;
+    image_threshold    = p->threshold;
+    image_cross_fill   = p->cross_fill;
+    steer_w_duty_ref   = p->w_ref;
+    drive_duty_base    = p->duty;
+    straight_judge     = p->st_judge;
+    drive_stop_time_s  = p->stop_time;
+}
+
+/* 预设子页面:名字缩进两格,选中行前加 "> ",
+   不像主列表那样覆盖掉名字前两个字符 */
+static void draw_preset_page(void)
+{
+    char row[MENU_COLS + 1];
+    uint8_t i, j, k;
+
+    menu_port_clear();
+    draw_title("PRESET");
+    for (i = 0; i < PRESET_COUNT; i++)
+    {
+        const char *nm = s_presets[i].name;
+        for (j = 0; j < MENU_COLS; j++) row[j] = ' ';
+        row[MENU_COLS] = '\0';
+        j = 2;
+        if (i == s_preset_cursor) { row[0] = '>'; row[1] = ' '; }
+        for (k = 0; nm[k] && j < MENU_COLS; k++) row[j++] = nm[k];
+        menu_port_draw_text(0, (uint8_t)(i + 2), row,
+                            (i == s_preset_cursor) ? MENU_STYLE_SELECTED
+                                                   : MENU_STYLE_NORMAL);
+    }
+    menu_port_draw_text(0, (uint8_t)(PRESET_COUNT + 3),
+                        "ENTER:apply  BACK:exit", MENU_STYLE_NORMAL);
+}
+
+void menu_action_race_preset(void)
+{
+    s_preset_cursor = 0;
+    s_nav = NAV_PRESET;
+    draw_preset_page();
 }
 
 void menu_action_camera(void)
@@ -331,6 +403,31 @@ static void menu_handle_key(const menu_key_event_t *ev)
         {
             s_camera_view = 0;
             s_align_test_mode = 0;
+            draw_list_full();
+        }
+        return;
+    }
+
+    if (s_nav == NAV_PRESET)
+    {
+        if (ev->key == MENU_KEY_UP)
+        {
+            if (s_preset_cursor > 0) { s_preset_cursor--; draw_preset_page(); }
+        }
+        else if (ev->key == MENU_KEY_DOWN)
+        {
+            if (s_preset_cursor + 1 < PRESET_COUNT) { s_preset_cursor++; draw_preset_page(); }
+        }
+        else if (ev->key == MENU_KEY_ENTER)
+        {
+            apply_preset(&s_presets[s_preset_cursor]);
+            s_nav = NAV_LIST;
+            draw_list_full();
+            draw_title(s_presets[s_preset_cursor].name); /* 标题回显应用了哪一档 */
+        }
+        else if (ev->key == MENU_KEY_BACK)
+        {
+            s_nav = NAV_LIST;
             draw_list_full();
         }
         return;

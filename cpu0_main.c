@@ -97,7 +97,7 @@ int core0_main(void) {
         control_duty_prev = 0;
         control_duty_reset();
       } else {
-        motor_apply_split(out.servo_pwm, out.duty_left, out.duty_right);
+        motor_apply(out.servo_pwm, out.duty);
         control_duty_prev = out.duty;
       }
     } else {
