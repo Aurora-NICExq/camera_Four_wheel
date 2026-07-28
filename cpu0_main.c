@@ -115,10 +115,29 @@ int core0_main(void) {
       drive_timed_out = 0;
     }
 
-    /* 摄像头预览会显著拖慢主循环(全屏 SPI 传输),高速跑圈前务必 BACK 退出 */
-    if (menu_camera_view())
-    {
-      ips200_displayimage03x((const uint8 *)mt9v03x_image, IMG_W, IMG_H);
+    /* 调试画面会显著拖慢主循环(全屏 SPI 传输),仅供停车调试与低速验证,
+       高速跑圈前务必 BACK 退出 */
+    if (menu_camera_view()) {
+      ips200_displayimage03x((const uint8 *)image_debug_frame(&g_track), IMG_W,
+                             IMG_H);
+      ips200_show_string(0, IMG_H + 4, "ERR");
+      ips200_show_int(32, IMG_H + 4, out.error_used, 4);
+      ips200_show_string(104, IMG_H + 4, "SRV");
+      ips200_show_uint(136, IMG_H + 4, out.servo_pwm, 4);
+      ips200_show_string(0, IMG_H + 20, "ROW");
+      ips200_show_uint(32, IMG_H + 20, g_track.valid_rows, 3);
+      ips200_show_string(104, IMG_H + 20, "DTY");
+      ips200_show_uint(136, IMG_H + 20, out.duty, 4);
+      ips200_show_string(0, IMG_H + 36, "LST");
+      ips200_show_uint(32, IMG_H + 36, g_track.both_lost_rows, 3);
+      ips200_show_string(104, IMG_H + 36, "STR");
+      ips200_show_uint(136, IMG_H + 36, out.straight, 1);
+      ips200_show_string(0, IMG_H + 52, "TH");
+      ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
+      ips200_show_string(104, IMG_H + 52, "CRS");
+      ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
+      ips200_show_string(0, IMG_H + 68, "CAP");
+      ips200_show_uint(32, IMG_H + 68, out.rows_cap, 4);
     }
     mt9v03x_finish_flag = 0;
   }

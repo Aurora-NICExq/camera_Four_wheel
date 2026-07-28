@@ -238,6 +238,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
 
     {
         uint16_t cap = rows_duty_cap(ti->valid_rows);
+        out->rows_cap = cap;
         if (speed_f > (float)cap)
         {
             speed_f = (float)cap;
@@ -264,6 +265,8 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     target = (uint16_t)speed_f;
     if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
+
+    out->duty_target = target;
 
     if (target > g_duty_now)
     {
@@ -322,5 +325,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
         out->duty_right = (uint16_t)r;
     }
 
-    out->duty = g_duty_now;
+    out->duty       = g_duty_now;
+    out->error_used = error;
+    out->straight   = straight;
 }
