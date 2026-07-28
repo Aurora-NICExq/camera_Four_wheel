@@ -12,7 +12,7 @@
  * 计时起点 = arm 后第一个有效帧;2s 内整车静止(舵机保持回中),之后软启动发车;
  * 发车 15s 后锁存停车,菜单 Armed 行显示 TMO,重新 OFF→ON 复位 */
 #define DRIVE_LAUNCH_DELAY_S (2)
-#define DRIVE_ARMED_TIMEOUT_S (15)
+#define DRIVE_ARMED_TIMEOUT_S (25)
 #define DRIVE_LAUNCH_DELAY_US ((uint32_t)DRIVE_LAUNCH_DELAY_S * 1000000u)
 #define DRIVE_ARMED_TIMEOUT_US ((uint32_t)DRIVE_ARMED_TIMEOUT_S * 1000000u)
 #define DRIVE_STOP_ELAPSED_US (DRIVE_LAUNCH_DELAY_US + DRIVE_ARMED_TIMEOUT_US)
