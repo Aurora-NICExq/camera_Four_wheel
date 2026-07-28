@@ -31,6 +31,8 @@ typedef struct
 #define MENU_BOOL(nm, v, df)             { (nm), (void*)&(v), ITEM_BOOL  , 0, 1, 1, (df), 0 }
 #define MENU_ACTION(nm, fn)              { (nm), 0, ITEM_ACTION, 0, 0, 0, 0, (fn) }
 
+extern volatile uint8_t  menu_fine_step;  /* 1 = 数值项按细步进调整 */
+
 extern const menu_item_t menu_items[];
 extern const uint16_t    menu_item_count;
 

@@ -5,6 +5,8 @@
 #include "motor.h"
 
 extern volatile float    steer_kp_min;
+volatile uint8_t menu_fine_step = 0;
+
 extern volatile float    steer_kp_max;
 extern volatile float    steer_kp_e_sat;
 extern volatile float    steer_kd;
@@ -20,6 +22,9 @@ extern volatile uint16_t steer_w_duty_ref;
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
 #define VALUE_WIDTH   (MENU_COLS - VALUE_COL)
 #define KEY_STEP_MULT (10.0f)                   // 长按自动重复步长倍率
+#define FINE_STEP_DIV  (0.1f)                   // Fine Step 开启时步长倍率
+#define FINE_MIN_FLOAT (0.01f)                  // 浮点最小步长(与 2 位小数显示精度对齐)
+#define FINE_MIN_INT   (1.0f)                   // 整型最小步长:再小会被取整吃掉,按键像失灵
 
 typedef enum { NAV_LIST, NAV_EDIT } nav_state_e;
 
@@ -83,7 +88,7 @@ static void draw_title(const char *txt)
 static void draw_title_edit(const char *name)
 {
     char t[MENU_COLS + 1];
-    const char *pfx = "[E] ";
+    const char *pfx = menu_fine_step ? "[F] " : "[E] "; /* F 提示当前是细步进 */
     uint8_t i, j = 0;
     for (i = 0; i < MENU_COLS; i++) t[i] = ' ';
     t[MENU_COLS] = '\0';
@@ -184,7 +189,18 @@ static void item_enter(void)
 static void edit_adjust(int8_t dir, uint8_t repeat)
 {
     const menu_item_t *it = s_edit_item;
-    float step = it->step * (repeat ? KEY_STEP_MULT : 1.0f);
+    float step = it->step;
+
+    /* Fine Step:短按细调、长按仍是原步长(0.1×10=1),一个开关覆盖四档精度。
+       下限按类型钳住——浮点不低于显示精度,整型不低于 1,
+       否则按键按下去数值不变,看起来像失灵 */
+    if (menu_fine_step)
+    {
+        float lo = (it->type == ITEM_FLOAT) ? FINE_MIN_FLOAT : FINE_MIN_INT;
+        step *= FINE_STEP_DIV;
+        if (step < lo) step = lo;
+    }
+    step *= (repeat ? KEY_STEP_MULT : 1.0f);
     s_edit_val += (dir > 0) ? step : -step;
     if (s_edit_val < it->min) s_edit_val = it->min;
     if (s_edit_val > it->max) s_edit_val = it->max;
