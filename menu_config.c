@@ -8,7 +8,6 @@ extern volatile float   steer_kp_e_sat;
 extern volatile float   steer_kd;
 extern volatile float   steer_d_filt_alpha;
 extern volatile uint16_t curve_duty;
-extern volatile uint16_t curve_temp_div;
 extern volatile uint16_t straight_duty;
 extern volatile int16_t straight_judge;
 extern volatile int16_t straight_judge_13;
@@ -27,7 +26,6 @@ const menu_item_t menu_items[] = {
     MENU_F32("Kd",           steer_kd,           0.0f, 30.0f, 0.1f,  KD),
     MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, D_FILT_ALPHA),
     MENU_U16("Curve Duty",   curve_duty,         0,    DUTY_HARD_CAP, 100, CURVE_DUTY),
-    MENU_U16("Curv Div",     curve_temp_div,     1,    2000,  10,    CURVE_TEMP_DIV),
     MENU_U16("Str Duty",    straight_duty,      0,    DUTY_HARD_CAP, 100, STRAIGHT_MAX_DUTY),
     MENU_I16("Threshold",    image_threshold,    0,    255,   1,     0),
     MENU_BOOL("Cross Fill",  image_cross_fill,   1),

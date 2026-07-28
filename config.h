@@ -90,18 +90,7 @@
 #define EXIT_ROWS_MIN (70)
 #define EXIT_MAX_BOTH_LOST (6)
 #define EXIT_CONFIRM_FRAMES (6)
-/* 曲率 = 中线的二阶差分 / 采样间距²,再乘 CURV_SCALE 定点化。
- * 旧实现用一阶差分(mid远 − mid近),会把车身偏航当成弯道:直道上车歪着走
- * 时中线在图像里同样是斜的,于是无故减速,并在摆动与速度之间形成反馈通路。
- * 二阶差分对任意倾斜的直线恒为 0,只对真正的弯曲响应。
- * 除以间距² 使读数与视野长短无关,判据的物理含义不再逐帧漂移。 */
-#define CURV_ROW_NEAR (8)      /* 最近采样点相对最近有效行的偏移 */
-#define CURV_HALF_WIN (4)      /* 每个采样点上下各取 N 行求均值(空间降噪,零延迟) */
-#define CURV_MIN_SAMPLES (5)   /* 采样窗内至少要有这么多行有效数据 */
-#define CURV_MIN_SPAN (16)     /* 采样间距下限;不足说明视野太短,按最保守处理 */
-#define CURV_SCALE (10000)     /* 定点缩放 */
-#define CURVE_TEMP_DIV (80)    /* 曲率→temp 归一化除数(菜单 Curv Div,必须实测标定) */
-#define CURVE_TEMP_FALL (0.08f) /* temp 非对称保持:升立即、降缓慢,S 弯不会中途误加速 */
+#define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
 #define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
 #define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */
 #define SLOW_MOTOR_STEP (50)   /* 缓启动：|target-now|<=50 或已到目标后放开 */
