@@ -9,10 +9,6 @@ volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
-#define IMG_DBG_LEFT  (80u)   /* 调试叠加灰度:左边线 */
-#define IMG_DBG_RIGHT (160u)  /* 右边线 */
-#define IMG_DBG_MID   (220u)  /* 中线 */
-#define IMG_DBG_FILL  (120u)  /* 十字补线行的边线:与实测边线区分,便于肉眼核对补线质量 */
 #define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
 
 static uint8_t  image_bin[IMG_H][IMG_W];
@@ -779,34 +775,6 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     }
 
     out->error = weighted_error(out, duty_now);
-}
-
-/* 调试显示:在二值图上叠加左右边线与中线并返回该帧缓冲。
-   image_bin 每帧由 binarize 全量重写,故就地绘制安全,无需第二份帧缓冲。
-   边界值在 export_track 里已 clamp 到 [0, IMG_W-1],下标安全。
-   纯显示用途,不参与任何控制运算 */
-const uint8_t *image_debug_frame(const track_info_t *ti)
-{
-    uint8_t tr;
-
-    for (tr = 1u; tr <= ti->valid_rows && tr < IMG_H; tr++)
-    {
-        uint8_t ir = (uint8_t)(IMG_H - 1u - tr);
-        uint8_t filled = ti->cross_filled[tr];
-        if (!ti->left_lost[tr])
-        {
-            image_bin[ir][ti->left[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_LEFT;
-        }
-        if (!ti->right_lost[tr])
-        {
-            image_bin[ir][ti->right[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_RIGHT;
-        }
-        if (!ti->left_lost[tr] && !ti->right_lost[tr])
-        {
-            image_bin[ir][ti->mid[tr]] = IMG_DBG_MID;
-        }
-    }
-    return (const uint8_t *)image_bin;
 }
 
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
