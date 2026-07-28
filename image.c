@@ -22,6 +22,8 @@ static uint8_t  start_point_r[2];
 static uint16_t data_stastics_l;
 static uint16_t data_stastics_r;
 static uint8_t  hightest_row;
+static int16_t  g_err_hold;
+static uint8_t  g_hold_frames;
 
 static int my_abs(int v)
 {
@@ -473,17 +475,34 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
 
         if (ti->left_lost[tr] && ti->right_lost[tr])
         {
-            w = (w * STEER_W_BOTH_LOST_PCT) / 100;
+            continue; /* 双边丢线行没有中线信息,不投假居中票 */
         }
-        else if (ti->left_lost[tr] || ti->right_lost[tr])
+        if (ti->left_lost[tr] || ti->right_lost[tr])
         {
             w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
         }
         acc   += w * ((int16_t)ti->mid[tr] - IMG_CENTER);
         w_sum += w;
     }
-    if (w_sum == 0) return 0;
-    return (int16_t)(acc / w_sum);
+
+    /* 盲区误差保持:十字开口等大面积丢线时有效权重塌陷,
+       沿用进入盲区前的误差保持原修正弧线穿过;直进时保持的恰好是 0,
+       与常规行为一致。超时后按比例衰减回中兜底 */
+    if (w_sum < ERR_HOLD_W_MIN)
+    {
+        if (g_hold_frames < ERR_HOLD_MAX_FRAMES)
+        {
+            g_hold_frames++;
+        }
+        else
+        {
+            g_err_hold = (int16_t)((g_err_hold * 3) / 4);
+        }
+        return g_err_hold;
+    }
+    g_hold_frames = 0;
+    g_err_hold = (int16_t)(acc / w_sum);
+    return g_err_hold;
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)

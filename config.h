@@ -30,7 +30,11 @@
 #define STEER_WEIGHTS_LOWSPEED {8, 10, 9, 6, 4, 2, 1, 0}
 #define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
 #define STEER_W_SINGLE_EDGE_PCT (50)
-#define STEER_W_BOTH_LOST_PCT (40)
+/* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
+ * 有效权重塌陷(视野基本全是开口)时沿用进入盲区前的误差,
+ * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
+#define ERR_HOLD_W_MIN (120)
+#define ERR_HOLD_MAX_FRAMES (20)
 
 #define EIGHTN_START_ROW (IMG_H - 2)
 #define EIGHTN_BORDER_MIN (1)
