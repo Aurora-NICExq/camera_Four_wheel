@@ -16,7 +16,6 @@ typedef struct
 
     uint8_t  valid_rows;
     int16_t  error;
-    uint8_t  err_held;   /* 本帧误差来自盲区保持而非实测,供控制侧抑制伪微分 */
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
@@ -35,9 +34,6 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
 /* 调试显示:二值图叠加边线/中线,纯显示不参与控制 */
 const uint8_t *image_debug_frame(const track_info_t *ti);
-
-/* 复位帧间记忆状态(误差保持、占空比低通) */
-void image_reset_state(void);
 
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe);
 

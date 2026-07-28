@@ -34,8 +34,6 @@ static uint8_t  cross_break_r;
 static uint8_t  cross_flag;
 static int16_t  g_err_hold;
 static uint8_t  g_hold_frames;
-static uint8_t  g_err_held_flag;
-static uint16_t g_duty_filt;
 
 static int my_abs(int v)
 {
@@ -690,14 +688,7 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
     uint32_t k;
 
     if (ref == 0u) ref = DUTY_HARD_CAP; /* 除零兜底 */
-
-    /* 占空比先低通再用于权重插值:直道标志抖动造成的 duty 锯齿不应逐帧
-       改变远近权重,否则速度抖动会被调制进转向误差 */
-    g_duty_filt = (uint16_t)(((uint32_t)g_duty_filt
-                                  * ((1u << STEER_W_DUTY_FILT_SHIFT) - 1u)
-                              + (uint32_t)duty_now)
-                             >> STEER_W_DUTY_FILT_SHIFT);
-    k = ((uint32_t)g_duty_filt * 256u) / ref;
+    k = ((uint32_t)duty_now * 256u) / ref;
     if (k > 256u) k = 256u;
 
     int32_t acc = 0;
@@ -714,16 +705,13 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         int32_t w = (int32_t)w_low[band] * (int32_t)(256u - k)
                   + (int32_t)w_high[band] * (int32_t)k;
 
-        /* 丢线判定必须优先于补线判定:补线拟合失败被 clamp 到边界的行
-           同时满足两个条件,若先判 cross_filled 就会以 70% 权重投出
-           一张"假居中"票 */
-        if (ti->left_lost[tr] && ti->right_lost[tr])
-        {
-            continue; /* 双边丢线行没有中线信息,不投假居中票 */
-        }
         if (ti->cross_filled[tr])
         {
             w = (w * STEER_W_CROSS_FILL_PCT) / 100;
+        }
+        else if (ti->left_lost[tr] && ti->right_lost[tr])
+        {
+            continue; /* 双边丢线行没有中线信息,不投假居中票 */
         }
         else if (ti->left_lost[tr] || ti->right_lost[tr])
         {
@@ -746,23 +734,11 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         {
             g_err_hold = (int16_t)((g_err_hold * 3) / 4);
         }
-        g_err_held_flag = 1u;
         return g_err_hold;
     }
     g_hold_frames = 0;
-    g_err_held_flag = 0u;
     g_err_hold = (int16_t)(acc / w_sum);
     return g_err_hold;
-}
-
-/* 复位帧间记忆状态:误差保持、占空比低通。由 control_init 调用,
-   避免重新 arm 或失控恢复后带着上一次的残留 */
-void image_reset_state(void)
-{
-    g_err_hold = 0;
-    g_hold_frames = 0;
-    g_err_held_flag = 0u;
-    g_duty_filt = 0;
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
@@ -803,7 +779,6 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     }
 
     out->error = weighted_error(out, duty_now);
-    out->err_held = g_err_held_flag;
 }
 
 /* 调试显示:在二值图上叠加左右边线与中线并返回该帧缓冲。
