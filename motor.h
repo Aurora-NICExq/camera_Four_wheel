@@ -10,6 +10,7 @@ void motor_hw_init(void);
 void motor_stop(void);
 void motor_reset(void);
 void motor_apply(uint16_t servo_pwm, uint16_t duty);
+void motor_apply_split(uint16_t servo_pwm, uint16_t duty_l, uint16_t duty_r);
 void motor_apply_servo_only(uint16_t servo_pwm);
 
 uint32_t hal_time_us(void);

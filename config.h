@@ -59,6 +59,16 @@
 #define EIGHTN_CROSS_OPEN_WIDTH  (140)        /* 十字开口判定最小宽度(像素) */
 #define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8) /* 开口采样最近行:再近的行正常赛道也接近全宽,不作依据 */
 
+/* 电子差速:转向时外侧轮加速、内侧轮减速,对称分配保持总推力不变。
+ * 收益有二:① 消掉内外轮路径差造成的纵向打滑,把被浪费的抓地力还给横向;
+ *           ② 产生帮助车头转入弯道的横摆力矩,直接对抗推头。
+ * 方向:舵机 PWM 低于中位 = 右转(SERVO_DIR=-1),此时左轮在外侧应加速。
+ * 注意它等效于放大转向增益,开启后可能需要下调 Kp。
+ * 仍为 IN1=duty / IN2=0,不改变 H 桥工作模式,对驱动板无额外风险。
+ * 默认 0 = 关闭(未经实测验证的耦合特性,需手动开启);建议起步值 0.15 */
+#define DIFF_GAIN (0.0f)
+#define DIFF_DEADZONE (0.15f) /* |舵角|/满舵 低于此值不介入,直道摆动不被放大 */
+
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
 #define SERVO_MIN (629)
@@ -125,15 +135,14 @@
 /* Race Preset:实测验证稳定的一组参数,菜单一键切换。
  * 先 apply_defaults 全量恢复(含 Armed=OFF),再逐项覆盖为下列实测值——
  * 显式写全每一项,保证一键进入的是完整可复现的状态,不受默认值改动影响。
- * 注意:该组参数是在"曲率改动之前"的固件上验证的,Curv Div 当时不存在,
- * 这里给的是待标定的默认值,首跑前必须按遥测 CRV 重新标定 */
+ * 本分支的速度调度与该组参数的验证环境一致(未含二阶差分曲率改动) */
 #define PRESET_KP_MIN     (0.89f)
 #define PRESET_KP_MAX     (1.68f)
 #define PRESET_KP_E_SAT   (13.0f)
 #define PRESET_KD         (3.08f)
 #define PRESET_D_ALPHA    (0.40f)
 #define PRESET_CURVE_DUTY (2600)
-#define PRESET_CURV_DIV   (CURVE_TEMP_DIV) /* 未标定,见上方注释 */
+#define PRESET_DIFF_GAIN  (0.0f) /* 实测组是在无差速下验证的,preset 保持关闭 */
 #define PRESET_STR_DUTY   (4000)
 #define PRESET_THRESHOLD  (0)
 #define PRESET_CROSS_FILL (1)

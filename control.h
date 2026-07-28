@@ -12,6 +12,8 @@ typedef struct
     uint16_t duty;
     int16_t  error_used;
     uint16_t duty_target;
+    uint16_t duty_left;  /* 差速后的左侧占空比 */
+    uint16_t duty_right; /* 差速后的右侧占空比 */
     uint8_t  straight;   /* 本帧直道确认结果,供调试显示 */
     uint16_t rows_cap;   /* 本帧行数安全网上限,供调试显示:限速何时介入不再是隐形的 */
 } control_out_t;
@@ -19,6 +21,7 @@ typedef struct
 extern volatile uint8_t  drive_armed;
 extern volatile uint8_t  drive_timed_out;
 extern volatile uint16_t drive_stop_time_s;
+extern volatile float    diff_gain;
 extern volatile uint16_t drive_duty_base;
 extern volatile uint16_t control_duty_prev;
 

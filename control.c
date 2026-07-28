@@ -16,6 +16,7 @@ volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
 volatile uint8_t  drive_armed       = 0;
 volatile uint8_t  drive_timed_out   = 0;
 volatile uint16_t drive_stop_time_s = DRIVE_ARMED_TIMEOUT_S;
+volatile float    diff_gain         = DIFF_GAIN;
 volatile uint16_t drive_duty_base   = STRAIGHT_DUTY;
 volatile uint16_t control_duty_prev = 0;
 
@@ -276,6 +277,52 @@ void control_update(const track_info_t *ti, control_out_t *out)
     {
         uint16_t step = (uint16_t)(g_duty_now - target);
         g_duty_now -= (step > DUTY_SLEW_DOWN) ? DUTY_SLEW_DOWN : step;
+    }
+
+    /* 电子差速:外侧加、内侧减,对称分配使左右平均值仍等于 g_duty_now。
+       off < 0 表示舵机 PWM 低于中位 = 右转,此时左轮在外侧:
+       左 = duty×(1−delta)、右 = duty×(1+delta),delta 取负 → 左加右减,方向正确。
+       半行程分左右各取,舵机中位若不对称(Servo Trim)也不会算错 */
+    {
+        int32_t off = (int32_t)out->servo_pwm - (int32_t)SERVO_CENTER;
+        float delta = 0.0f;
+        int32_t l;
+        int32_t r;
+
+        if (diff_gain > 0.0f && g_duty_now > 0u)
+        {
+            int32_t half = (off >= 0) ? (int32_t)(SERVO_MAX - SERVO_CENTER)
+                                      : (int32_t)(SERVO_CENTER - SERVO_MIN);
+            if (half > 0)
+            {
+                float norm = (float)off / (float)half;
+                float mag;
+
+                if (norm > 1.0f)  norm = 1.0f;
+                if (norm < -1.0f) norm = -1.0f;
+                mag = (norm >= 0.0f) ? norm : -norm;
+
+                if (mag > DIFF_DEADZONE)
+                {
+                    /* 去掉死区后重标定到 0~1,阈值处无转矩突跳 */
+                    mag = (mag - DIFF_DEADZONE) / (1.0f - DIFF_DEADZONE);
+                    delta = diff_gain * mag;
+                    if (norm < 0.0f)
+                    {
+                        delta = -delta; /* 右转:左加右减 */
+                    }
+                }
+            }
+        }
+
+        l = (int32_t)((float)g_duty_now * (1.0f - delta));
+        r = (int32_t)((float)g_duty_now * (1.0f + delta));
+        if (l < 0) l = 0;
+        if (r < 0) r = 0;
+        if (l > DUTY_HARD_CAP) l = DUTY_HARD_CAP;
+        if (r > DUTY_HARD_CAP) r = DUTY_HARD_CAP;
+        out->duty_left  = (uint16_t)l;
+        out->duty_right = (uint16_t)r;
     }
 
     out->duty       = g_duty_now;

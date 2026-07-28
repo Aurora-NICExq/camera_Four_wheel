@@ -40,6 +40,21 @@ void motor_apply(uint16_t servo_pwm, uint16_t duty)
     pwm_set_duty(PIN_MOTOR_RIGHT_IN1, duty);
 }
 
+/* 左右分别给定占空比(电子差速)。H 桥工作模式与 motor_apply 完全一致
+   (IN1=duty / IN2=0),两侧只是数值不同,对驱动板无额外要求 */
+void motor_apply_split(uint16_t servo_pwm, uint16_t duty_l, uint16_t duty_r)
+{
+    pwm_set_duty(PIN_SERVO_PWM, control_servo_clamp((int32_t)servo_pwm));
+
+    if (duty_l > PWM_DUTY_MAX) { duty_l = PWM_DUTY_MAX; }
+    if (duty_r > PWM_DUTY_MAX) { duty_r = PWM_DUTY_MAX; }
+
+    pwm_set_duty(PIN_MOTOR_LEFT_IN2, 0U);
+    pwm_set_duty(PIN_MOTOR_RIGHT_IN2, 0U);
+    pwm_set_duty(PIN_MOTOR_LEFT_IN1, duty_l);
+    pwm_set_duty(PIN_MOTOR_RIGHT_IN1, duty_r);
+}
+
 void motor_stop(void)
 {
     pwm_set_duty(PIN_MOTOR_LEFT_IN1, 0U);

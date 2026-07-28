@@ -223,7 +223,7 @@ void menu_action_race_preset(void)
     steer_kd           = PRESET_KD;
     steer_d_filt_alpha = PRESET_D_ALPHA;
     curve_duty         = PRESET_CURVE_DUTY;
-    curve_temp_div     = PRESET_CURV_DIV;
+    diff_gain          = PRESET_DIFF_GAIN;
     straight_duty      = PRESET_STR_DUTY;
     image_threshold    = PRESET_THRESHOLD;
     image_cross_fill   = PRESET_CROSS_FILL;
