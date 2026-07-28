@@ -53,8 +53,8 @@
 
 #define KP_MIN (1.09f)
 #define KP_MAX (9.48f)
-#define KP_E_SAT (35.0f)
-#define KD (1.49f)
+#define KP_E_SAT (45.0f) /* 35→45:出口 15~22px 摆动段退出饱和,D 恢复阻尼窗口;弯道误差 ≥25px 仍满舵 */
+#define KD (2.5f)        /* 脱饱和后 D 才有效;以直道安静、出口一次收敛不过冲为准微调 */
 #define D_FILT_ALPHA (0.4f)
 
 #define STRAIGHT_DUTY (2500) /* 基准占空比 25%（满量程 10000） */
