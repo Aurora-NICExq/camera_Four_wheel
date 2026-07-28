@@ -136,6 +136,8 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
       ips200_show_string(104, IMG_H + 52, "CRS");
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
+      ips200_show_string(0, IMG_H + 68, "CAP");
+      ips200_show_uint(32, IMG_H + 68, out.rows_cap, 4);
     }
     mt9v03x_finish_flag = 0;
   }

@@ -95,11 +95,13 @@
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
-/* 有效行数限速(master cap_rows 通道):入弯口视野塌缩早于近端误差出现,
- * 按可见行数封顶目标占空比;直道确认加速同样受此上限约束 */
-#define ROWS_CAP_TABLE_LEN (5)
-#define ROWS_CAP_BINS {25, 45, 65, 85, 105}
-#define ROWS_CAP_DUTY {1800, 2200, 2600, 3200, DUTY_HARD_CAP}
+/* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Curve Duty
+ * 抢弯速话语权——弯速由 Curve Duty 与曲率调度唯一决定,调多少就是多少。
+ * 入弯口的减速已由 curve_temp 与 STRAIGHT_MIN_ROWS 覆盖,此表不再重复承担。
+ * 各档上限均高于常用 Curve Duty,ROW 掉到 35 以下(视野严重劣化)才介入 */
+#define ROWS_CAP_TABLE_LEN (3)
+#define ROWS_CAP_BINS {20, 35, 55}
+#define ROWS_CAP_DUTY {1500, 2200, 3400}
 
 #define FAILSAFE_MIN_ROWS (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)

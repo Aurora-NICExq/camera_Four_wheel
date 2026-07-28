@@ -230,6 +230,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
 
     {
         uint16_t cap = rows_duty_cap(ti->valid_rows);
+        out->rows_cap = cap;
         if (speed_f > (float)cap)
         {
             speed_f = (float)cap;
