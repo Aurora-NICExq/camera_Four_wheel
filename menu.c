@@ -4,9 +4,17 @@
 #include "control.h"
 #include "motor.h"
 
+extern volatile float    steer_kp_min;
 extern volatile float    steer_kp_max;
+extern volatile float    steer_kp_e_sat;
+extern volatile float    steer_kd;
+extern volatile float    steer_d_filt_alpha;
 extern volatile uint16_t curve_duty;
 extern volatile uint16_t straight_duty;
+extern volatile int16_t  straight_judge;
+extern volatile int16_t  image_threshold;
+extern volatile uint8_t  image_cross_fill;
+extern volatile uint16_t steer_w_duty_ref;
 
 #define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
@@ -205,14 +213,24 @@ void menu_action_defaults(void)
     redraw_visible_values();
 }
 
-/* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再覆盖四项 */
+/* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再逐项覆盖 */
 void menu_action_race_preset(void)
 {
     apply_defaults();
-    steer_kp_max    = PRESET_KP_MAX;
-    curve_duty      = PRESET_CURVE_DUTY;
-    straight_duty   = PRESET_STR_DUTY;
-    drive_duty_base = PRESET_DUTY;
+    steer_kp_min       = PRESET_KP_MIN;
+    steer_kp_max       = PRESET_KP_MAX;
+    steer_kp_e_sat     = PRESET_KP_E_SAT;
+    steer_kd           = PRESET_KD;
+    steer_d_filt_alpha = PRESET_D_ALPHA;
+    curve_duty         = PRESET_CURVE_DUTY;
+    curve_temp_div     = PRESET_CURV_DIV;
+    straight_duty      = PRESET_STR_DUTY;
+    image_threshold    = PRESET_THRESHOLD;
+    image_cross_fill   = PRESET_CROSS_FILL;
+    steer_w_duty_ref   = PRESET_W_REF;
+    drive_duty_base    = PRESET_DUTY;
+    straight_judge     = PRESET_ST_JUDGE;
+    drive_stop_time_s  = PRESET_STOP_TIME;
     draw_title("Race Preset");
     redraw_visible_values();
 }

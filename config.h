@@ -133,11 +133,24 @@
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
-/* Race Preset:实测验证可行的一组参数,菜单一键切换
- * (先恢复全部默认,再覆盖以下四项,保证进入的是完整的已验证状态) */
-#define PRESET_KP_MAX     (3.08f)
-#define PRESET_CURVE_DUTY (2400)
-#define PRESET_STR_DUTY   (3700)
-#define PRESET_DUTY       (2900)
+/* Race Preset:实测验证稳定的一组参数,菜单一键切换。
+ * 先 apply_defaults 全量恢复(含 Armed=OFF),再逐项覆盖为下列实测值——
+ * 显式写全每一项,保证一键进入的是完整可复现的状态,不受默认值改动影响。
+ * 注意:该组参数是在"曲率改动之前"的固件上验证的,Curv Div 当时不存在,
+ * 这里给的是待标定的默认值,首跑前必须按遥测 CRV 重新标定 */
+#define PRESET_KP_MIN     (0.89f)
+#define PRESET_KP_MAX     (1.68f)
+#define PRESET_KP_E_SAT   (13.0f)
+#define PRESET_KD         (3.08f)
+#define PRESET_D_ALPHA    (0.40f)
+#define PRESET_CURVE_DUTY (2600)
+#define PRESET_CURV_DIV   (CURVE_TEMP_DIV) /* 未标定,见上方注释 */
+#define PRESET_STR_DUTY   (4000)
+#define PRESET_THRESHOLD  (0)
+#define PRESET_CROSS_FILL (1)
+#define PRESET_W_REF      (3800)
+#define PRESET_DUTY       (3100)
+#define PRESET_ST_JUDGE   (8)
+#define PRESET_STOP_TIME  (25)
 
 #endif /* CONFIG_H */
