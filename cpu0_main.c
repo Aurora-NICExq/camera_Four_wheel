@@ -25,7 +25,8 @@ int core0_main(void) {
 
   uint16_t fail_cnt = 0;
   uint8_t severe_fail_cnt = 0;
-  uint32_t armed_t0_us = 0;
+  uint32_t armed_elapsed_us = 0;
+  uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
   control_out_t out = {0};
@@ -75,16 +76,23 @@ int core0_main(void) {
       uint32_t now_us = hal_time_us();
       if (!armed_t0_set) {
         armed_t0_set = 1;
-        armed_t0_us = now_us;
+        armed_elapsed_us = 0;
+      } else {
+        uint32_t dt = now_us - armed_last_us;
+        if (dt > DRIVE_DT_CLAMP_US) {
+          dt = DRIVE_DT_NOMINAL_US;
+        }
+        armed_elapsed_us += dt;
       }
+      armed_last_us = now_us;
       if (drive_timed_out ||
-          (now_us - armed_t0_us) >=
+          armed_elapsed_us >=
               DRIVE_LAUNCH_DELAY_US + (uint32_t)drive_stop_time_s * 1000000u) {
         drive_timed_out = 1;
         motor_reset();
         control_duty_prev = 0;
         control_duty_reset();
-      } else if ((now_us - armed_t0_us) < DRIVE_LAUNCH_DELAY_US) {
+      } else if (armed_elapsed_us < DRIVE_LAUNCH_DELAY_US) {
         motor_reset();
         control_duty_prev = 0;
         control_duty_reset();

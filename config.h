@@ -14,6 +14,10 @@
 #define DRIVE_LAUNCH_DELAY_S (2)
 #define DRIVE_ARMED_TIMEOUT_S (25) /* 菜单 Stop Time 默认值(秒) */
 #define DRIVE_LAUNCH_DELAY_US ((uint32_t)DRIVE_LAUNCH_DELAY_S * 1000000u)
+/* 计时不依赖时间戳单调:逐帧累计 dt,单帧差值异常(定时器回绕/毛刺)
+ * 时按名义帧周期累计,避免回绕导致的瞬间误超时 */
+#define DRIVE_DT_CLAMP_US (200000u)
+#define DRIVE_DT_NOMINAL_US (20000u)
 
 #define FIXED_THRESHOLD (128)
 #define OTSU_ROW_STEP (2)
@@ -57,6 +61,13 @@
 #define CURVE_DUTY (2000)        /* 急弯(temp=1)绝对目标占空比 20% */
 #define STRAIGHT_MAX_DUTY (3200) /* 直道确认目标占空比 32% */
 #define STRAIGHT_MIN_ROWS (80)   /* 直道确认所需最少有效行,视野变短即提前退出加速 */
+
+/* 出弯确认门(master exit gate 精简版):出弯后误差连续收敛 N 帧
+ * 才放行直道加速,出口瞬态未消化时不让增益与速度同时上涨点燃直道摇摆 */
+#define EXIT_ERR_MAX (10)
+#define EXIT_ROWS_MIN (70)
+#define EXIT_MAX_BOTH_LOST (6)
+#define EXIT_CONFIRM_FRAMES (6)
 #define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
 #define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
 #define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */

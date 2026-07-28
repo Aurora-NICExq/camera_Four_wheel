@@ -23,6 +23,7 @@ static int16_t  g_prev_error;
 static float    g_d_filt;
 static uint16_t g_duty_now;
 static uint8_t  g_slow_motor;
+static uint8_t  g_exit_cnt;
 
 static int16_t iabs16(int16_t v)
 {
@@ -169,6 +170,7 @@ void control_init(void)
     g_d_filt     = 0.0f;
     g_duty_now   = 0;
     g_slow_motor = 1u;
+    g_exit_cnt   = 0;
 }
 
 void control_reset(void)
@@ -208,12 +210,27 @@ void control_update(const track_info_t *ti, control_out_t *out)
     straight = straight_flag_judge(ti);
     temp     = curve_temp(ti);
 
+    /* 出弯确认:误差连续收敛若干帧后才允许直道加速 */
+    if (iabs16(error) <= EXIT_ERR_MAX && ti->valid_rows >= EXIT_ROWS_MIN &&
+        ti->both_lost_rows <= EXIT_MAX_BOTH_LOST)
+    {
+        if (g_exit_cnt < 255u)
+        {
+            g_exit_cnt++;
+        }
+    }
+    else
+    {
+        g_exit_cnt = 0;
+    }
+
     speed_f = (float)drive_duty_base;
     if (speed_f > (float)curve_duty)
     {
         speed_f -= (speed_f - (float)curve_duty) * temp;
     }
-    if (straight && (float)straight_duty > speed_f)
+    if (straight && g_exit_cnt >= EXIT_CONFIRM_FRAMES &&
+        (float)straight_duty > speed_f)
     {
         speed_f = (float)straight_duty;
     }
