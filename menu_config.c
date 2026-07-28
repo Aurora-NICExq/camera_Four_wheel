@@ -24,7 +24,7 @@ const menu_item_t menu_items[] = {
     MENU_F32("Kp Min",       steer_kp_min,       0.0f, 20.0f, 0.1f,  KP_MIN),
     MENU_F32("Kp Max",       steer_kp_max,       0.0f, 20.0f, 0.1f,  KP_MAX),
     MENU_F32("Kp E Sat",     steer_kp_e_sat,     5.0f, 80.0f, 1.0f,  KP_E_SAT),
-    MENU_F32("Kd",           steer_kd,           0.0f, 30.0f, 0.1f,  KD),
+    MENU_F32("Kd",           steer_kd,           0.0f, 500.0f, 0.1f, KD),
     MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, D_FILT_ALPHA),
     MENU_U16("Curve Duty",   curve_duty,         0,    DUTY_HARD_CAP, 100, CURVE_DUTY),
     MENU_U16("Str Duty",    straight_duty,      0,    DUTY_HARD_CAP, 100, STRAIGHT_MAX_DUTY),
