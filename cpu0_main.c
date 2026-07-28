@@ -77,7 +77,9 @@ int core0_main(void) {
         armed_t0_set = 1;
         armed_t0_us = now_us;
       }
-      if (drive_timed_out || (now_us - armed_t0_us) >= DRIVE_STOP_ELAPSED_US) {
+      if (drive_timed_out ||
+          (now_us - armed_t0_us) >=
+              DRIVE_LAUNCH_DELAY_US + (uint32_t)drive_stop_time_s * 1000000u) {
         drive_timed_out = 1;
         motor_reset();
         control_duty_prev = 0;

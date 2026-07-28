@@ -15,6 +15,7 @@ volatile int16_t straight_judge     = STRAIGHT_JUDGE;
 volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
 volatile uint8_t  drive_armed       = 0;
 volatile uint8_t  drive_timed_out   = 0;
+volatile uint16_t drive_stop_time_s = DRIVE_ARMED_TIMEOUT_S;
 volatile uint16_t drive_duty_base   = STRAIGHT_DUTY;
 volatile uint16_t control_duty_prev = 0;
 

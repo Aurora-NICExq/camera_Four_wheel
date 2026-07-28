@@ -10,12 +10,10 @@
 /* arm 后延时发车 + 定时停车,基于 STM 硬件时钟(hal_time_us)按挂钟时间计:
  * 帧计数会因图像处理/屏幕刷新拖慢主循环而掉帧合并、严重失真,挂钟时间不会。
  * 计时起点 = arm 后第一个有效帧;2s 内整车静止(舵机保持回中),之后软启动发车;
- * 发车 15s 后锁存停车,菜单 Armed 行显示 TMO,重新 OFF→ON 复位 */
+ * 发车后跑满菜单 Stop Time 秒锁存停车,Armed 行显示 TMO,重新 OFF→ON 复位 */
 #define DRIVE_LAUNCH_DELAY_S (2)
-#define DRIVE_ARMED_TIMEOUT_S (25)
+#define DRIVE_ARMED_TIMEOUT_S (25) /* 菜单 Stop Time 默认值(秒) */
 #define DRIVE_LAUNCH_DELAY_US ((uint32_t)DRIVE_LAUNCH_DELAY_S * 1000000u)
-#define DRIVE_ARMED_TIMEOUT_US ((uint32_t)DRIVE_ARMED_TIMEOUT_S * 1000000u)
-#define DRIVE_STOP_ELAPSED_US (DRIVE_LAUNCH_DELAY_US + DRIVE_ARMED_TIMEOUT_US)
 
 #define FIXED_THRESHOLD (128)
 #define OTSU_ROW_STEP (2)
