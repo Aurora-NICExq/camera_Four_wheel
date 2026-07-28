@@ -78,9 +78,8 @@
 #define STRAIGHT_DUTY (2900) /* 基准占空比(菜单 Duty 默认值,满量程 10000) */
 #define DUTY_HARD_CAP (6000)
 
-/* 曲率速度调度:急弯目标为绝对值 Curve Duty,不随 Duty 上浮:
- * target = Duty - (Duty - CurveDuty)×temp;直道确认(且行数足够)只增不减 = Str Duty */
-#define CURVE_DUTY (2400)        /* 急弯(temp=1)绝对目标占空比 */
+/* 速度:基准由菜单 Duty 决定,弯道不再单独降速(曲率调速已删除);
+ * 直道确认(且行数足够、出弯门放行)后只增不减地提到 Str Duty */
 #define STRAIGHT_MAX_DUTY (3700) /* 直道确认目标占空比 */
 #define STRAIGHT_MIN_ROWS (80)   /* 直道确认所需最少有效行,视野变短即提前退出加速 */
 
@@ -90,7 +89,6 @@
 #define EXIT_ROWS_MIN (70)
 #define EXIT_MAX_BOTH_LOST (6)
 #define EXIT_CONFIRM_FRAMES (6)
-#define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
 #define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
 #define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */
 #define SLOW_MOTOR_STEP (50)   /* 缓启动：|target-now|<=50 或已到目标后放开 */
@@ -98,10 +96,9 @@
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
-/* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Curve Duty
- * 抢弯速话语权——弯速由 Curve Duty 与曲率调度唯一决定,调多少就是多少。
- * 入弯口的减速已由 curve_temp 与 STRAIGHT_MIN_ROWS 覆盖,此表不再重复承担。
- * 各档上限均高于常用 Curve Duty,ROW 掉到 35 以下(视野严重劣化)才介入 */
+/* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Duty
+ * 抢速度话语权——速度由菜单 Duty 唯一决定,调多少就是多少。
+ * 各档上限均高于常用 Duty,ROW 掉到 35 以下(视野严重劣化)才介入 */
 #define ROWS_CAP_TABLE_LEN (3)
 #define ROWS_CAP_BINS {20, 35, 55}
 #define ROWS_CAP_DUTY {1500, 2200, 3400}
@@ -127,16 +124,12 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测可完赛的稳定组。
- * Curve Duty(2400) == Duty(2400) → 曲率削速不生效(Duty 不大于 Curve Duty 时跳过削减);
- * Str Duty(2500) > Duty → 直道确认后小幅提到 2500。
- * 即"基准 2400、直道 2500"的保守完赛配置 */
+/* 低速档:实测可完赛的稳定组。基准 2400,直道确认后提到 2500 */
 #define PRESET_LOW_KP_MIN     (0.79f)
 #define PRESET_LOW_KP_MAX     (1.67f)
 #define PRESET_LOW_KP_E_SAT   (10.0f)
 #define PRESET_LOW_KD         (4.66f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
-#define PRESET_LOW_CURVE_DUTY (2400)
 #define PRESET_LOW_STR_DUTY   (2500)
 #define PRESET_LOW_THRESHOLD  (0)
 #define PRESET_LOW_CROSS_FILL (1)
@@ -145,16 +138,14 @@
 #define PRESET_LOW_ST_JUDGE   (8)
 #define PRESET_LOW_STOP_TIME  (30)
 
-/* 中速档:实测可用组。
- * Curve Duty(2500) < Duty(3200) → 曲率削速生效,急弯降到 2500;
- * Str Duty(3200) == Duty → 直道确认不再额外提速。
- * 即"基准 3200、急弯 2500"的配置,与低速档的主要差别是基准速度和 W Ref */
+/* 中速档:实测可用组。基准 3200;Str Duty == Duty,直道不额外提速。
+ * 注意:该组当初依赖曲率削速把急弯降到 2500,曲率调速删除后急弯同样跑 3200,
+ * 与验证条件已不同,首次使用需重新确认弯道 */
 #define PRESET_MID_KP_MIN     (0.79f)
 #define PRESET_MID_KP_MAX     (1.70f)
 #define PRESET_MID_KP_E_SAT   (13.0f)
 #define PRESET_MID_KD         (4.73f)
 #define PRESET_MID_D_ALPHA    (0.40f)
-#define PRESET_MID_CURVE_DUTY (2500)
 #define PRESET_MID_STR_DUTY   (3200)
 #define PRESET_MID_THRESHOLD  (0)
 #define PRESET_MID_CROSS_FILL (1)
@@ -169,7 +160,6 @@
 #define PRESET_HIGH_KP_E_SAT   (KP_E_SAT)
 #define PRESET_HIGH_KD         (KD)
 #define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)
-#define PRESET_HIGH_CURVE_DUTY (CURVE_DUTY)
 #define PRESET_HIGH_STR_DUTY   (STRAIGHT_MAX_DUTY)
 #define PRESET_HIGH_THRESHOLD  (0)
 #define PRESET_HIGH_CROSS_FILL (1)

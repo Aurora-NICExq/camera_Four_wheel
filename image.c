@@ -665,7 +665,7 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     ti->valid_rows = (uint8_t)(hi - lo + 1u);
 
     /* 裁掉远端连续双丢行:搜索未到达或沿图像黑框爬行的行只有假居中数据,
-       留在 valid_rows 里会稀释 weighted_error,并让 curve_temp 在入弯口失明 */
+       留在 valid_rows 里会稀释 weighted_error */
     while (ti->valid_rows > 0u)
     {
         uint8_t far_tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + ti->valid_rows - 1u);
