@@ -22,8 +22,11 @@ volatile uint16_t control_duty_prev = 0;
 static int16_t  g_prev_error;
 static float    g_d_filt;
 static uint16_t g_duty_now;
-static uint8_t  g_slow_motor;
 static uint8_t  g_exit_cnt;
+static uint8_t  g_str_on_cnt;
+static uint8_t  g_str_off_cnt;
+static uint8_t  g_straight_lat;
+static uint8_t  g_was_held;
 
 static int16_t iabs16(int16_t v)
 {
@@ -166,11 +169,15 @@ static uint16_t rows_duty_cap(uint8_t rows)
 
 void control_init(void)
 {
-    g_prev_error = 0;
-    g_d_filt     = 0.0f;
-    g_duty_now   = 0;
-    g_slow_motor = 1u;
-    g_exit_cnt   = 0;
+    g_prev_error   = 0;
+    g_d_filt       = 0.0f;
+    g_duty_now     = 0;
+    g_exit_cnt     = 0;
+    g_str_on_cnt   = 0;
+    g_str_off_cnt  = 0;
+    g_straight_lat = 0;
+    g_was_held     = 0;
+    image_reset_state();
 }
 
 void control_reset(void)
@@ -181,8 +188,7 @@ void control_reset(void)
 
 void control_duty_reset(void)
 {
-    g_duty_now   = 0;
-    g_slow_motor = 1u;
+    g_duty_now = 0;
 }
 
 void control_update(const track_info_t *ti, control_out_t *out)
@@ -192,6 +198,16 @@ void control_update(const track_info_t *ti, control_out_t *out)
     float temp;
     uint16_t target;
     uint8_t straight;
+
+    /* 盲区(十字开口)释放帧:误差从"保持值"跳回实测值,这是信息不连续
+       而非真实微分,直接送进 D 会打出一记突刺,恰好发生在出十字姿态最
+       脆弱的时刻。释放帧把微分状态清零重新起算 */
+    if (g_was_held && !ti->err_held)
+    {
+        g_prev_error = error;
+        g_d_filt     = 0.0f;
+    }
+    g_was_held = ti->err_held;
 
     float d_raw = (float)(error - g_prev_error);
     g_prev_error = error;
@@ -207,8 +223,33 @@ void control_update(const track_info_t *ti, control_out_t *out)
 
     out->servo_pwm = control_servo_clamp(servo_raw);
 
-    straight = straight_flag_judge(ti);
-    temp     = curve_temp(ti);
+    /* 直道标志滞回:三点共线判据对远端像素噪声极敏感,无滞回会逐帧翻转。
+       配合"降速瞬时、升速 120/帧"的不对称斜坡,单个抖动帧要 7 帧才爬回,
+       直道占空比因此长期锯齿,并经 control_duty_prev 把速度抖动
+       调制进转向误差 */
+    {
+        uint8_t raw = straight_flag_judge(ti);
+        if (raw)
+        {
+            g_str_off_cnt = 0;
+            if (g_str_on_cnt < 255u) g_str_on_cnt++;
+        }
+        else
+        {
+            g_str_on_cnt = 0;
+            if (g_str_off_cnt < 255u) g_str_off_cnt++;
+        }
+        if (!g_straight_lat && g_str_on_cnt >= STRAIGHT_ON_FRAMES)
+        {
+            g_straight_lat = 1u;
+        }
+        if (g_straight_lat && g_str_off_cnt >= STRAIGHT_OFF_FRAMES)
+        {
+            g_straight_lat = 0u;
+        }
+        straight = g_straight_lat;
+    }
+    temp = curve_temp(ti);
 
     /* 出弯确认:误差连续收敛若干帧后才允许直道加速 */
     if (iabs16(error) <= EXIT_ERR_MAX && ti->valid_rows >= EXIT_ROWS_MIN &&
@@ -241,20 +282,6 @@ void control_update(const track_info_t *ti, control_out_t *out)
         if (speed_f > (float)cap)
         {
             speed_f = (float)cap;
-        }
-    }
-
-    if (g_slow_motor)
-    {
-        int32_t diff = (int32_t)speed_f - (int32_t)g_duty_now;
-        if (diff < 0) diff = -diff;
-        if (diff <= SLOW_MOTOR_STEP || g_duty_now >= (uint16_t)speed_f)
-        {
-            g_slow_motor = 0u;
-        }
-        else
-        {
-            speed_f = (float)g_duty_now + speed_f / 4.0f;
         }
     }
 

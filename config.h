@@ -33,6 +33,10 @@
  * 必须设成实际能跑到的顶速,设成 DUTY_HARD_CAP 会让远端表永远吃不满,
  * 车始终"看半近半远"、等偏差出现才起手,峰值打角偏大 */
 #define STEER_W_DUTY_REF (3800)
+/* 权重插值用的占空比低通(一阶 1/8,约 8 帧时间常数)。
+ * 直道标志抖动会让 duty 锯齿,若直接拿它插值远近权重,速度抖动就被
+ * 调制进转向误差,形成"速度↔转向"的正反馈通路 */
+#define STEER_W_DUTY_FILT_SHIFT (3)
 #define STEER_W_SINGLE_EDGE_PCT (50)
 #define STEER_W_CROSS_FILL_PCT (70) /* 十字补线行降权:补出的边界是外推值,不如实测边线可信 */
 /* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
@@ -83,6 +87,10 @@
 #define CURVE_DUTY (2400)        /* 急弯(temp=1)绝对目标占空比 */
 #define STRAIGHT_MAX_DUTY (3700) /* 直道确认目标占空比 */
 #define STRAIGHT_MIN_ROWS (80)   /* 直道确认所需最少有效行,视野变短即提前退出加速 */
+/* 直道标志滞回:三点共线判据对远端像素噪声极敏感,无滞回会逐帧翻转。
+ * 退出(OFF)比进入(ON)快一帧,弯道优先:宁可早降速,不可晚降速 */
+#define STRAIGHT_ON_FRAMES (3)
+#define STRAIGHT_OFF_FRAMES (2)
 
 /* 出弯确认门(master exit gate 精简版):出弯后误差连续收敛 N 帧
  * 才放行直道加速,出口瞬态未消化时不让增益与速度同时上涨点燃直道摇摆 */
@@ -93,7 +101,6 @@
 #define CURVE_TEMP_DIV (30)    /* 曲率归一化除数，temp 上限 1 */
 #define STRAIGHT_JUDGE (8)     /* 边界共线判定阈值（像素） */
 #define STRAIGHT_JUDGE_13 (25) /* 远近端差距过大则不算直道 */
-#define SLOW_MOTOR_STEP (50)   /* 缓启动：|target-now|<=50 或已到目标后放开 */
 
 #define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
@@ -110,7 +117,10 @@
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)
 #define FAILSAFE_SEVERE_BOTH_LOST_PCT (90)
 #define FAILSAFE_FRAMES (10)
-#define FAILSAFE_SEVERE_FRAMES (2)
+/* 严重失效帧数:触发后断电 + 舵机回中 + control_init 全量复位,
+ * 相当于赛道中央急停再起步。2 帧(40ms)在高速下会被运动模糊/光照突变
+ * 误触发,代价远大于收益,放宽到 5 帧(100ms) */
+#define FAILSAFE_SEVERE_FRAMES (5)
 
 #define MOTOR_PWM_FREQ (17000)
 
