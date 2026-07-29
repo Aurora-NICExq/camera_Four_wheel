@@ -1,4 +1,5 @@
 /* cpu0_main.c */
+#include "seekfree_baud.h"
 #include "config.h"
 #include "control.h"
 #include "image.h"

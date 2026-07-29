@@ -1,4 +1,5 @@
 /* menu_port.c - menu HAL (IPS200 + keys) */
+#include "seekfree_baud.h"
 #include "zf_common_headfile.h"
 #include "pins.h"
 #include "config.h"

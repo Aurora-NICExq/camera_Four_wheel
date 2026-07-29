@@ -1,4 +1,5 @@
 /* telemetry.c - 逐飞无线串口 CSV 遥测(有界队列,不阻塞主循环) */
+#include "seekfree_baud.h"
 #include <stdio.h>
 #include "config.h"
 #include "control.h"
@@ -9,7 +10,8 @@
 volatile uint8_t telemetry_enable = 0;
 
 #define TELEM_QUEUE_BYTES   (384u)
-#define TELEM_PUMP_BUDGET   (64u)
+/* 460800 下每帧可多泵字节,仍检查 RTS 避免长时间阻塞 */
+#define TELEM_PUMP_BUDGET   (256u)
 #define TELEM_HW_CHUNK      (30u)
 
 static uint8_t  s_queue[TELEM_QUEUE_BYTES];

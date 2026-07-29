@@ -91,6 +91,9 @@
 
 /* 无线 CSV 遥测:每 TELEM_DIV 帧发一行,约 50fps 下 10Hz */
 #define TELEM_DIV (5u)
+/* 无线模块波特率:460800(逐飞 V2.0+ 接 RTS 自动波特率可用)。须与 PC 助手、
+ * 逐飞库 WIRELESS_UART_BUAD_RATE 一致,见 seekfree_baud.h */
+#define TELEM_UART_BAUD (460800u)
 
 /* ---------------- Race Preset:低/中/高三档 ----------------
  * 菜单 Race Preset 进入子页面选择档位,ENTER 应用。
