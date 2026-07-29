@@ -124,19 +124,20 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测可完赛的稳定组。基准 2400,直道确认后提到 2500 */
-#define PRESET_LOW_KP_MIN     (0.79f)
-#define PRESET_LOW_KP_MAX     (1.67f)
+/* 低速档:实测可完赛的稳定组。Str Duty == Duty,直道不额外提速,
+ * 全程恒速 2100 —— 与"占空比全部设成相同值"的实测条件一致 */
+#define PRESET_LOW_KP_MIN     (0.69f)
+#define PRESET_LOW_KP_MAX     (1.77f)
 #define PRESET_LOW_KP_E_SAT   (10.0f)
-#define PRESET_LOW_KD         (4.66f)
+#define PRESET_LOW_KD         (4.65f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
-#define PRESET_LOW_STR_DUTY   (2500)
+#define PRESET_LOW_STR_DUTY   (2100)
 #define PRESET_LOW_THRESHOLD  (0)
 #define PRESET_LOW_CROSS_FILL (1)
 #define PRESET_LOW_W_REF      (5700)
-#define PRESET_LOW_DUTY       (2400)
+#define PRESET_LOW_DUTY       (2100)
 #define PRESET_LOW_ST_JUDGE   (8)
-#define PRESET_LOW_STOP_TIME  (30)
+#define PRESET_LOW_STOP_TIME  (105)
 
 /* 中速档:实测可用组。基准 3200;Str Duty == Duty,直道不额外提速。
  * 注意:该组当初依赖曲率削速把急弯降到 2500,曲率调速删除后急弯同样跑 3200,
