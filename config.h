@@ -63,7 +63,9 @@
 
 
 
-#define DUTY_SLEW_DOWN (10000) /* 减速不限幅，目标降低时立即跟进 */
+/* 减速不限幅:目标降低时立即跟进,见 control.c。
+ * 曾有 DUTY_SLEW_DOWN(10000),但 g_duty_now ≤ DUTY_HARD_CAP(6000),
+ * 单帧降幅恒 < 10000,该限幅分支永远走不到——已删,不要再加回来 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
 /* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Curve Duty
@@ -109,10 +111,10 @@
 #define PRESET_LOW_DUTY       (2100)
 #define PRESET_LOW_STOP_TIME  (105)
 
-/* 中速档:实测可用组。
- * Curve Duty(2500) < Duty(3200) → 曲率削速生效,急弯降到 2500;
- * Str Duty(3200) == Duty → 直道确认不再额外提速。
- * 即"基准 3200、急弯 2500"的配置,与低速档的主要差别是基准速度和 W Ref */
+/* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200 WRef=6000。
+ * 与低速档的差别只有基准速度和 W Ref(以及被迫抬高的 Kd)。
+ * 注:Curve Duty / Str Duty 已于 c24f320 删除,速度全程只由菜单 Duty 决定,
+ * 急弯降速只剩 rows_duty_cap 这一条图像质量安全网 */
 #define PRESET_MID_KP           (KP)
 #define PRESET_MID_KD         (4.73f)
 #define PRESET_MID_D_ALPHA    (0.40f)
@@ -122,7 +124,10 @@
 #define PRESET_MID_DUTY       (3200)
 #define PRESET_MID_STOP_TIME  (28)
 
-/* 高速档:占位,尚未实测。当前同为代码默认值 */
+/* 高速档:占位,尚未实测。每一项都等于代码默认值,
+ * 因此"应用高速档" == "Restore Def",Duty 仍是低速的 2100。
+ * 菜单里已改名为 "High (= Default)",避免赛道上误以为选了一档快的。
+ * 实测出真正的高速参数前,不要把名字改回 "High" */
 #define PRESET_HIGH_KP           (KP)
 #define PRESET_HIGH_KD         (KD)
 #define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)

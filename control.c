@@ -104,8 +104,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     else
     {
-        uint16_t step = (uint16_t)(g_duty_now - target);
-        g_duty_now -= (step > DUTY_SLEW_DOWN) ? DUTY_SLEW_DOWN : step;
+        g_duty_now = target; /* 减速不限幅:目标降低立即跟进 */
     }
 
     out->duty       = g_duty_now;

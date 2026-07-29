@@ -27,7 +27,6 @@ static int16_t both_lost_time;
 static int16_t left_lost_flag[IMG_H];
 static int16_t right_lost_flag[IMG_H];
 
-static int16_t cross_flag;
 static int16_t g_err_hold;      /* 盲区误差保持 */
 static uint8_t g_hold_frames;
 static int16_t left_up_find;
@@ -46,9 +45,6 @@ static void init_cross_meta(track_info_t *ti)
 {
     uint8_t r;
     ti->cross_valid = 0;
-    ti->cross_lo = 0;
-    ti->cross_hi = 0;
-    ti->inflect_row = 0xFF;
     for (r = 0; r < IMG_H; r++)
     {
         ti->cross_filled[r] = 0;
@@ -478,18 +474,12 @@ static void mark_cross_fill(int y1, int y2, track_info_t *ti)
             ti->cross_filled[tr] = 1;
         }
     }
-    if (ti->cross_lo == 0 && ti->cross_hi == 0)
-    {
-        ti->cross_lo = TR_ROW(a2);
-        ti->cross_hi = (uint8_t)(TR_ROW(a1) + 1u);
-    }
 }
 
 static void cross_detect(track_info_t *ti)
 {
     int down_search_start;
 
-    cross_flag = 0;
     left_up_find = 0;
     right_up_find = 0;
     left_down_find = 0;
@@ -510,7 +500,6 @@ static void cross_detect(track_info_t *ti)
         return;
     }
 
-    cross_flag = 1;
     down_search_start = (left_up_find > right_up_find) ? left_up_find : right_up_find;
     find_down_point(IMG_H - 5, down_search_start + 2);
 
@@ -551,7 +540,6 @@ static void cross_detect(track_info_t *ti)
     }
 
     ti->cross_valid = 1;
-    ti->inflect_row = TR_ROW(left_up_find);
 }
 
 static void image_filter(uint8_t bin[IMG_H][IMG_W])
@@ -589,7 +577,6 @@ static void export_track(track_info_t *ti)
         ti->left[tr]  = clamp_u8(left_line[ir], 0, IMG_W - 1);
         ti->right[tr] = clamp_u8(right_line[ir], 0, IMG_W - 1);
         ti->mid[tr]   = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
-        ti->width[tr] = (uint8_t)(ti->right[tr] - ti->left[tr]);
         ti->left_lost[tr]  = (uint8_t)left_lost_flag[ir];
         ti->right_lost[tr] = (uint8_t)right_lost_flag[ir];
     }
@@ -770,9 +757,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     uint8_t th;
 
     init_cross_meta(out);
-    cross_flag = 0;
 
-    th = (image_threshold > 0) ? (uint8_t)image_threshold : otsu_threshold(img);
+    th =(image_threshold > 0) ? (uint8_t)image_threshold : otsu_threshold(img);
     out->threshold = th;
 
     binarize(img, th);
