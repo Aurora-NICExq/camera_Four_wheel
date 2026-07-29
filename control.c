@@ -9,6 +9,7 @@ volatile float   steer_kp_max       = KP_MAX;
 volatile float   steer_kp_e_sat     = KP_E_SAT;
 volatile float   steer_kd           = KD;
 volatile float   steer_d_filt_alpha = D_FILT_ALPHA;
+volatile uint16_t curve_duty       = CURVE_DUTY;
 volatile uint16_t straight_duty    = STRAIGHT_MAX_DUTY;
 volatile int16_t straight_judge     = STRAIGHT_JUDGE;
 volatile int16_t straight_judge_13  = STRAIGHT_JUDGE_13;
@@ -121,6 +122,30 @@ static uint8_t straight_flag_judge(const track_info_t *ti)
     return 0u;
 }
 
+/* temp = |mid远 - mid近| / CURVE_TEMP_DIV，上限 1 */
+static float curve_temp(const track_info_t *ti)
+{
+    uint8_t near_r;
+    uint8_t far_r;
+    int16_t diff;
+    float temp;
+
+    if (ti->valid_rows < 2u)
+    {
+        return 1.0f;
+    }
+
+    near_r = track_near_row();
+    far_r  = track_far_row(ti);
+    diff   = (int16_t)ti->mid[far_r] - (int16_t)ti->mid[near_r];
+    temp   = (float)iabs16(diff) / (float)CURVE_TEMP_DIV;
+    if (temp > 1.0f)
+    {
+        temp = 1.0f;
+    }
+    return temp;
+}
+
 /* 有效行数限速(master cap_rows 通道):入弯口视野塌缩早于近端误差出现,
    按可见行数封顶目标占空比 */
 static uint16_t rows_duty_cap(uint8_t rows)
@@ -164,6 +189,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
 {
     int16_t error = ti->error;
     float speed_f;
+    float temp;
     uint16_t target;
     uint8_t straight;
 
@@ -182,6 +208,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     out->servo_pwm = control_servo_clamp(servo_raw);
 
     straight = straight_flag_judge(ti);
+    temp     = curve_temp(ti);
 
     /* 出弯确认:误差连续收敛若干帧后才允许直道加速 */
     if (iabs16(error) <= EXIT_ERR_MAX && ti->valid_rows >= EXIT_ROWS_MIN &&
@@ -198,6 +225,10 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
 
     speed_f = (float)drive_duty_base;
+    if (speed_f > (float)curve_duty)
+    {
+        speed_f -= (speed_f - (float)curve_duty) * temp;
+    }
     if (straight && g_exit_cnt >= EXIT_CONFIRM_FRAMES &&
         (float)straight_duty > speed_f)
     {
