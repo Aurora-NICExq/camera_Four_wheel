@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
+#include "zf_common_headfile.h"
 
 volatile int16_t  image_threshold  = 0;
 volatile uint8_t  image_cross_fill = 1;   /* 菜单 Cross Fill */
@@ -12,11 +13,6 @@ volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF; /* 菜单 W Ref */
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
 #define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
-
-#define IMG_DBG_LEFT  (80u)   /* 调试叠加灰度:左边线 */
-#define IMG_DBG_RIGHT (160u)  /* 右边线 */
-#define IMG_DBG_MID   (220u)  /* 中线 */
-#define IMG_DBG_FILL  (120u)  /* 补线行的边线,与实测边线区分 */
 
 static uint8_t image_bin[IMG_H][IMG_W];
 static int16_t left_line[IMG_H];
@@ -680,29 +676,67 @@ uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
     }
 }
 
-/* 调试显示:二值图上叠加左右边线与中线,就地绘制(image_bin 每帧重写),
-   纯显示不参与控制 */
-const uint8_t *image_debug_frame(const track_info_t *ti)
+static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color)
+{
+    if (x0 == x1 && y0 == y1)
+    {
+        ips200_draw_point(x0, y0, color);
+    }
+    else
+    {
+        ips200_draw_line(x0, y0, x1, y1, color);
+    }
+}
+
+/* 二值底图 + IPS200 彩色线:左蓝/右红/中绿,十字补线边线为黄 */
+void image_debug_show(const track_info_t *ti)
 {
     uint8_t tr;
-    for (tr = 0; tr < ti->valid_rows && tr < IMG_H; tr++)
+
+    ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
+
+    for (tr = 1; tr < ti->valid_rows; tr++)
     {
-        uint8_t ir = (uint8_t)(IMG_H - 1u - tr);
-        uint8_t filled = ti->cross_filled[tr];
-        if (!ti->left_lost[tr])
+        uint16_t y0 = (uint16_t)(IMG_H - tr);
+        uint16_t y1 = (uint16_t)(IMG_H - 1u - tr);
+        uint8_t  filled0 = ti->cross_filled[tr - 1u];
+        uint8_t  filled1 = ti->cross_filled[tr];
+
+        if (!ti->left_lost[tr - 1u] && !ti->left_lost[tr])
         {
-            image_bin[ir][ti->left[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_LEFT;
+            debug_draw_seg(ti->left[tr - 1u], y0, ti->left[tr], y1,
+                           (filled0 || filled1) ? RGB565_YELLOW : RGB565_BLUE);
         }
-        if (!ti->right_lost[tr])
+        if (!ti->right_lost[tr - 1u] && !ti->right_lost[tr])
         {
-            image_bin[ir][ti->right[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_RIGHT;
+            debug_draw_seg(ti->right[tr - 1u], y0, ti->right[tr], y1,
+                           (filled0 || filled1) ? RGB565_YELLOW : RGB565_RED);
         }
-        if (!ti->left_lost[tr] && !ti->right_lost[tr])
+        if (!ti->left_lost[tr - 1u] && !ti->right_lost[tr - 1u] &&
+            !ti->left_lost[tr] && !ti->right_lost[tr])
         {
-            image_bin[ir][ti->mid[tr]] = IMG_DBG_MID;
+            debug_draw_seg(ti->mid[tr - 1u], y0, ti->mid[tr], y1, RGB565_GREEN);
         }
     }
-    return (const uint8_t *)image_bin;
+
+    if (ti->valid_rows == 1u)
+    {
+        uint16_t y = (uint16_t)(IMG_H - 1u);
+        if (!ti->left_lost[0])
+        {
+            ips200_draw_point(ti->left[0], y,
+                              ti->cross_filled[0] ? RGB565_YELLOW : RGB565_BLUE);
+        }
+        if (!ti->right_lost[0])
+        {
+            ips200_draw_point(ti->right[0], y,
+                              ti->cross_filled[0] ? RGB565_YELLOW : RGB565_RED);
+        }
+        if (!ti->left_lost[0] && !ti->right_lost[0])
+        {
+            ips200_draw_point(ti->mid[0], y, RGB565_GREEN);
+        }
+    }
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
