@@ -94,14 +94,13 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测可完赛的稳定组。Curve Duty == Str Duty == Duty == 2100,
- * 曲率削速与直道加速均不生效,全程恒速 —— 与"占空比全部设成相同值"的实测条件一致 */
-#define PRESET_LOW_KP           (KP)
-#define PRESET_LOW_KD         (4.65f)
+/* 低速档:实测验证可行组 Kp=2.259 Kd=1.49 Duty=2100 WRef=3800 */
+#define PRESET_LOW_KP           (2.259f)
+#define PRESET_LOW_KD         (1.49f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
 #define PRESET_LOW_THRESHOLD  (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_W_REF      (5700)
+#define PRESET_LOW_W_REF      (3800)
 #define PRESET_LOW_DUTY       (2100)
 #define PRESET_LOW_STOP_TIME  (105)
 
@@ -119,7 +118,6 @@
 #define PRESET_MID_STOP_TIME  (28)
 
 /* 高速档:占位,尚未实测。当前同为代码默认值 */
-#define PRESET_HIGH_KP_MIN     (KP_MIN)
 #define PRESET_HIGH_KP           (KP)
 #define PRESET_HIGH_KD         (KD)
 #define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)

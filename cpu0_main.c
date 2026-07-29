@@ -118,8 +118,7 @@ int core0_main(void) {
     /* 调试画面会显著拖慢主循环(全屏 SPI 传输),仅供停车调试与低速验证,
        高速跑圈前务必 BACK 退出 */
     if (menu_camera_view()) {
-      ips200_displayimage03x((const uint8 *)image_debug_frame(&g_track), IMG_W,
-                             IMG_H);
+      image_debug_show(&g_track);
       ips200_show_string(0, IMG_H + 4, "ERR");
       ips200_show_int(32, IMG_H + 4, out.error_used, 4);
       ips200_show_string(104, IMG_H + 4, "SRV");
