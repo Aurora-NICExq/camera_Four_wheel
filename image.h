@@ -35,6 +35,10 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 /* Camera 调试:二值底图 + 彩色边线/中线叠加,纯显示不参与控制 */
 void image_debug_show(const track_info_t *ti);
 
+/* 摄像头校准:仅二值化、跳过 3x3 滤波,便于观察环岛等内部黑区 */
+uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W]);
+uint8_t image_calib_last_th(void);
+
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe);
 
 #endif /* IMAGE_H */

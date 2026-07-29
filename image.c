@@ -688,7 +688,41 @@ static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, u
     }
 }
 
-/* 二值底图 + IPS200 彩色线:左蓝/右红/中绿,十字补线边线为黄 */
+static uint8_t calib_bin[IMG_H][IMG_W];
+static uint8_t g_calib_last_th = 0;
+
+static uint8_t image_resolve_threshold(const uint8_t img[IMG_H][IMG_W])
+{
+    if (image_threshold > 0)
+    {
+        return (uint8_t)image_threshold;
+    }
+    return otsu_threshold(img);
+}
+
+uint8_t image_calib_last_th(void)
+{
+    return g_calib_last_th;
+}
+
+/* 校准视图:raw 二值化,不做 3x3 滤波,黑区不被填白 */
+uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W])
+{
+    uint8_t th = image_resolve_threshold(img);
+    uint16_t r, c;
+
+    g_calib_last_th = th;
+    for (r = 0; r < IMG_H; r++)
+    {
+        for (c = 0; c < IMG_W; c++)
+        {
+            calib_bin[r][c] = (img[r][c] >= th) ? IMG_WHITE : IMG_BLACK;
+        }
+    }
+    ips200_show_gray_image(0, 0, (const uint8 *)calib_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
+    return th;
+}
+
 void image_debug_show(const track_info_t *ti)
 {
     uint8_t tr;

@@ -117,7 +117,19 @@ int core0_main(void) {
 
     /* 调试画面会显著拖慢主循环(全屏 SPI 传输),仅供停车调试与低速验证,
        高速跑圈前务必 BACK 退出 */
-    if (menu_camera_view()) {
+    if (menu_calib_view()) {
+      uint8_t th = image_calib_show((const uint8_t (*)[IMG_W])mt9v03x_image);
+      ips200_show_string(0, IMG_H + 4, "TH");
+      if (image_threshold > 0) {
+        ips200_show_int(32, IMG_H + 4, image_threshold, 3);
+      } else {
+        ips200_show_string(32, IMG_H + 4, "A");
+        ips200_show_int(48, IMG_H + 4, th, 3);
+      }
+      ips200_show_string(0, IMG_H + 20, "NO 3X3 FLT");
+      ips200_show_string(0, IMG_H + 36, "UP/DN:TH");
+      ips200_show_string(0, IMG_H + 52, "BACK:exit");
+    } else if (menu_camera_view()) {
       image_debug_show(&g_track);
       ips200_show_string(0, IMG_H + 4, "ERR");
       ips200_show_int(32, IMG_H + 4, out.error_used, 4);
