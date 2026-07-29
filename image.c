@@ -766,7 +766,7 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
 
     init_cross_meta(out);
 
-    th =(image_threshold > 0) ? (uint8_t)image_threshold : otsu_threshold(img);
+    th = (image_threshold > 0) ? (uint8_t)image_threshold : otsu_threshold(img);
     out->threshold = th;
 
     binarize(img, th);
