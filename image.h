@@ -10,7 +10,6 @@ typedef struct
     uint8_t  left [IMG_H];
     uint8_t  right[IMG_H];
     uint8_t  mid  [IMG_H];
-    uint8_t  width[IMG_H];
     uint8_t  left_lost [IMG_H];
     uint8_t  right_lost[IMG_H];
 
@@ -21,9 +20,6 @@ typedef struct
 
     uint8_t  cross_filled[IMG_H];
     uint8_t  cross_valid;
-    uint8_t  cross_lo;
-    uint8_t  cross_hi;
-    uint8_t  inflect_row;
 } track_info_t;
 
 extern volatile int16_t image_threshold;
