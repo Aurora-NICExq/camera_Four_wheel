@@ -5,6 +5,7 @@
 #include "menu.h"
 #include "motor.h"
 #include "menu_port.h"
+#include "telemetry.h"
 #include "zf_common_headfile.h"
 
 #pragma section all "cpu0_dsram"
@@ -18,6 +19,7 @@ int core0_main(void) {
   motor_hw_init();
   menu_port_init();
   control_init();
+  telemetry_init();
   menu_init();
 
   mt9v03x_init();
@@ -29,10 +31,37 @@ int core0_main(void) {
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
+  uint32_t telem_frame = 0;
   control_out_t out = {0};
+  uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
+  uint8_t ut_active_prev = 0, ut_tick = 0;
 
   while (TRUE) {
     menu_task();
+
+    ut_tick = 0;
+    if (menu_uart_test_mode()) {
+      uint32_t now_us = hal_time_us();
+      if (!ut_active_prev) {
+        ut_active_prev = 1;
+        ut_seq = 0;
+        ut_drop = 0;
+        ut_last_us = now_us;
+        ut_tick = 1;
+        if (!telemetry_test_banner()) {
+          ut_drop++;
+        }
+      } else if ((uint32_t)(now_us - ut_last_us) >= UART_TEST_PERIOD_US) {
+        ut_last_us = now_us;
+        ut_seq++;
+        ut_tick = 1;
+        if (!telemetry_test_send(ut_seq, now_us / 1000u)) {
+          ut_drop++;
+        }
+      }
+    } else {
+      ut_active_prev = 0;
+    }
 
     if (!mt9v03x_finish_flag) {
       continue;
@@ -66,7 +95,16 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
-    if (menu_motor_test_mode()) {
+    telem_frame++;
+    if (drive_armed && !menu_uart_test_mode()) {
+      uint32_t telem_t_ms = armed_elapsed_us / 1000u;
+      telemetry_update(telem_t_ms, telem_frame, &g_track, &out);
+    }
+    telemetry_pump();
+
+    if (menu_uart_test_mode()) {
+      motor_reset();
+    } else if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
       control_duty_prev = 0;
     } else if (menu_align_test_mode()) {
@@ -115,8 +153,6 @@ int core0_main(void) {
       drive_timed_out = 0;
     }
 
-    /* 调试画面会显著拖慢主循环(全屏 SPI 传输),仅供停车调试与低速验证,
-       高速跑圈前务必 BACK 退出 */
     if (menu_calib_view()) {
       uint8_t th = image_calib_show((const uint8_t (*)[IMG_W])mt9v03x_image);
       ips200_show_string(0, IMG_H + 4, "TH");
@@ -145,8 +181,18 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
       ips200_show_string(104, IMG_H + 52, "CRS");
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
-      ips200_show_string(0, IMG_H + 68, "CAP");
-      ips200_show_uint(32, IMG_H + 68, out.rows_cap, 4);
+      ips200_show_string(0, IMG_H + 68, "HLD");
+      ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
+      ips200_show_string(104, IMG_H + 68, "CAP");
+      ips200_show_uint(136, IMG_H + 68, out.rows_cap, 4);
+    } else if (menu_uart_test_mode() && ut_tick) {
+      menu_port_draw_uint(8, 2, telemetry_wireless_ok(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 3, telemetry_tx_bytes(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 4, ut_seq, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 5, ut_drop, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 6, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 7, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 8, telemetry_baud(), 7, MENU_STYLE_NORMAL);
     }
     mt9v03x_finish_flag = 0;
   }

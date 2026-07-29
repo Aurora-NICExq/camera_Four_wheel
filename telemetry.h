@@ -13,7 +13,6 @@ void telemetry_pump(void);
 void telemetry_update(uint32_t t_ms, uint32_t frame,
                       const track_info_t *ti, const control_out_t *out);
 
-
 uint8_t  telemetry_test_send(uint32_t seq, uint32_t t_ms);
 uint8_t  telemetry_test_banner(void);
 uint8_t  telemetry_wireless_ok(void);

@@ -65,7 +65,6 @@ void telemetry_reinit(void)
 
     s_wireless_ok = (st == 0u) ? 1u : 0u;
 
-
     gpio_init(WIRELESS_UART_RTS_PIN, GPI, 0, GPI_PULL_UP);
 
     s_head        = 0u;
@@ -92,7 +91,6 @@ void telemetry_pump(void)
     {
         uint16_t n;
 
-
         if (s_wireless_ok && gpio_get_level(WIRELESS_UART_RTS_PIN))
         {
             break;
@@ -115,7 +113,6 @@ void telemetry_pump(void)
         }
         s_count = (uint16_t)(s_count - n);
 
-
         uart_write_buffer(WIRELESS_UART_INDEX, chunk, n);
         s_tx_bytes += (uint32_t)n;
         budget = (uint16_t)(budget - n);
@@ -132,12 +129,10 @@ uint32_t telemetry_tx_bytes(void)
     return s_tx_bytes;
 }
 
-
 uint32_t telemetry_baud(void)
 {
     return (uint32_t)WIRELESS_UART_BUAD_RATE;
 }
-
 
 uint8_t telemetry_test_send(uint32_t seq, uint32_t t_ms)
 {
@@ -158,7 +153,6 @@ uint8_t telemetry_test_send(uint32_t seq, uint32_t t_ms)
     return queue_push((const uint8_t *)buf, (uint16_t)len);
 }
 
-
 uint8_t telemetry_test_banner(void)
 {
     uint8_t ok;
@@ -172,7 +166,6 @@ uint16_t telemetry_queue_depth(void)
 {
     return s_count;
 }
-
 
 uint8_t telemetry_rts_blocked(void)
 {
@@ -200,13 +193,10 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
 
     if (s_need_header)
     {
-
-
         if (queue_push_line(
-                "# t_ms,err,hold,srv,dty,tgt,row,nr,fr,ar,lst,th,crs,"
-                "kp100,kd100,farw\r\n"))
+                "# t_ms,err,hold,srv,dty,tgt,cap,row,lst,th,crs,"
+                "kp100,kd100,wref\r\n"))
         {
-
             s_need_header = 0u;
         }
     }
@@ -217,23 +207,21 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     }
 
     len = snprintf(buf, sizeof(buf),
-                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
                    (unsigned)out->servo_pwm,
                    (unsigned)out->duty,
                    (unsigned)out->duty_target,
+                   (unsigned)out->rows_cap,
                    (unsigned)ti->valid_rows,
-                   (unsigned)ti->near_rows,
-                   (unsigned)ti->far_rows,
-                   (unsigned)ti->aim_rows,
                    (unsigned)ti->both_lost_rows,
                    (unsigned)ti->threshold,
                    (unsigned)ti->cross_valid,
                    (unsigned)(uint32_t)(steer_kp * 100.0f + 0.5f),
                    (unsigned)(uint32_t)(steer_kd * 100.0f + 0.5f),
-                   (unsigned)steer_far_w_pct);
+                   (unsigned)steer_w_duty_ref);
     if (len > 0)
     {
         uint16_t send_len = (len < (int)sizeof(buf))

@@ -89,6 +89,11 @@
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
+/* 无线 CSV 遥测:每 TELEM_DIV 帧发一行,约 50fps 下 10Hz */
+#define TELEM_DIV (5u)
+#define TELEM_UART_BAUD (115200u)
+#define UART_TEST_PERIOD_US (200000u)
+
 /* ---------------- Race Preset:低/中/高三档 ----------------
  * 菜单 Race Preset 进入子页面选择档位,ENTER 应用。
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),

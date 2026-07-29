@@ -16,6 +16,7 @@ typedef struct
 
     uint8_t  valid_rows;
     int16_t  error;
+    uint8_t  err_hold;
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
