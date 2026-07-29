@@ -94,8 +94,8 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测验证可行组 Kp=2.259 Kd=1.49 Duty=2100 WRef=3800 */
-#define PRESET_LOW_KP           (2.259f)
+/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100 WRef=3800 */
+#define PRESET_LOW_KP           (2.29f)
 #define PRESET_LOW_KD         (1.49f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
 #define PRESET_LOW_THRESHOLD  (0)
