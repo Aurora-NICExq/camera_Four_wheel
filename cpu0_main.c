@@ -5,6 +5,7 @@
 #include "menu.h"
 #include "motor.h"
 #include "menu_port.h"
+#include "telemetry.h"
 #include "zf_common_headfile.h"
 
 #pragma section all "cpu0_dsram"
@@ -18,6 +19,7 @@ int core0_main(void) {
   motor_hw_init();
   menu_port_init();
   control_init();
+  telemetry_init();
   menu_init();
 
   mt9v03x_init();
@@ -29,6 +31,7 @@ int core0_main(void) {
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
+  uint32_t telem_frame = 0;
   control_out_t out = {0};
 
   while (TRUE) {
@@ -65,6 +68,14 @@ int core0_main(void) {
     }
 
     control_update(&g_track, &out);
+
+    telem_frame++;
+    if (drive_armed)
+    {
+      uint32_t telem_t_ms = armed_elapsed_us / 1000u;
+      telemetry_update(telem_t_ms, telem_frame, &g_track, &out);
+    }
+    telemetry_pump();
 
     if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);

@@ -11,10 +11,12 @@ extern volatile uint16_t steer_w_duty_ref;
 extern volatile uint8_t  drive_armed;
 extern volatile uint16_t drive_stop_time_s;
 extern volatile uint16_t drive_duty_base;
+extern volatile uint8_t telemetry_enable;
 
 const menu_item_t menu_items[] = {
     MENU_BOOL("Armed",      drive_armed,        0),
     MENU_BOOL("Fine Step",  menu_fine_step,     0),
+    MENU_BOOL("Telemetry",  telemetry_enable,   0),
     MENU_F32("Kp",           steer_kp,           0.0f, 20.0f, 0.1f,  KP),
     MENU_F32("Kd",           steer_kd,           0.0f, 30.0f, 0.1f,  KD),
     MENU_F32("D Filt Alpha", steer_d_filt_alpha, 0.0f, 1.0f,  0.05f, D_FILT_ALPHA),
