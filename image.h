@@ -15,6 +15,11 @@ typedef struct
 
     uint8_t  valid_rows;
     int16_t  error;
+    /* error 的来源:0 = 本帧实测;1..ERR_HOLD_MAX_FRAMES = 盲区保持中,
+       值为已保持的帧数,到上限后维持该值并每帧 ×3/4 衰减回中。
+       没有这一列时,遥测里陈旧误差和实测误差长得完全一样,
+       整段日志会被误当成实测数据来调 Kp/Kd */
+    uint8_t  err_hold;
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 

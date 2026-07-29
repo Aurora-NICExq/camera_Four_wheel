@@ -781,4 +781,7 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     export_track(out);
 
     out->error = weighted_error(out, duty_now);
+    /* weighted_error 内部:实测帧把 g_hold_frames 清 0,盲区帧递增到上限。
+       在这里导出,让"这一帧的误差是不是真的"进遥测 */
+    out->err_hold = g_hold_frames;
 }

@@ -15,6 +15,13 @@ typedef struct
     uint16_t rows_cap;   /* 本帧行数安全网上限,供调试显示:限速何时介入不再是隐形的 */
 } control_out_t;
 
+/* control.c 的整定量。此前只在 menu.c / menu_config.c 里各自 extern,
+   telemetry.c 直接引用 steer_kp/kd 却没有任何声明在作用域内(隐式声明,
+   非法 C)。统一收到定义所在模块的头文件里 */
+extern volatile float    steer_kp;
+extern volatile float    steer_kd;
+extern volatile float    steer_d_filt_alpha;
+
 extern volatile uint8_t  drive_armed;
 extern volatile uint8_t  drive_timed_out;
 extern volatile uint16_t drive_stop_time_s;
