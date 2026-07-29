@@ -1,4 +1,4 @@
-/* image.h */
+/* image.h - track_info_t + 最长白列巡线 */
 #ifndef IMAGE_H
 #define IMAGE_H
 

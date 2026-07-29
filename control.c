@@ -30,10 +30,10 @@ static int16_t iabs16(int16_t v)
     return (v >= 0) ? v : (int16_t)(-v);
 }
 
-/* 近车端 track 行：TR_ROW(EIGHTN_START_ROW)，与 export_track 写入对齐 */
+/* 近车端 track 行:最长白列版 export_track 从行 0 起写(0 = 最近车行) */
 static uint8_t track_near_row(void)
 {
-    return (uint8_t)(IMG_H - 1u - EIGHTN_START_ROW);
+    return 0u;
 }
 
 static uint8_t track_far_row(const track_info_t *ti)

@@ -41,23 +41,11 @@
 #define ERR_HOLD_W_MIN (120)
 #define ERR_HOLD_MAX_FRAMES (20)
 
-#define EIGHTN_START_ROW (IMG_H - 2)
-#define EIGHTN_BORDER_MIN (1)
-#define EIGHTN_BORDER_MAX (IMG_W - 2)
-#define EIGHTN_MAX_POINTS (IMG_H * 3)
-#define EIGHTN_FILTER_SUM_MAX (255 * 5)
-#define EIGHTN_FILTER_SUM_MIN (255 * 2)
-#define EIGHTN_MEET_DIST (2)
-#define EIGHTN_EDGE_LOST_MARGIN  (2)          /* 边界贴到图像黑框(±2px)视作丢线:沿框爬行的链条不含中线信息 */
-
-/* 十字补线:菜单 Cross Fill 开关控制,便于开/关背靠背对比 */
-#define EIGHTN_CROSS_SLOPE_BACK (15)
-#define EIGHTN_CROSS_SLOPE_NEAR  (5)
-#define EIGHTN_CROSS_CORNER_L    (4)
-#define EIGHTN_CROSS_CORNER_R    (IMG_W - 4)
-#define EIGHTN_CROSS_BREAK_DROW  (15)         /* 十字左右上拐点行号最大允许偏差 */
-#define EIGHTN_CROSS_OPEN_WIDTH  (140)        /* 十字开口判定最小宽度(像素) */
-#define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8) /* 开口采样最近行:再近的行正常赛道也接近全宽,不作依据 */
+/* 最长白列巡线:列扫描找自底向上连续白像素最长的列作为左右搜索基准 */
+#define TH18_COL_MARGIN          (20)  /* 列扫描左右留白,避开图像边缘 */
+#define TH18_CROSS_BOTH_LOST_MIN (10)  /* 十字检测:双边丢线行数下限 */
+#define IMG_FILTER_SUM_MAX (255 * 5)   /* 3x3 去噪:邻域白点足够多则填白 */
+#define IMG_FILTER_SUM_MIN (255 * 2)   /* 邻域白点过少则填黑 */
 
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
