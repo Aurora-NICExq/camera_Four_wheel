@@ -4,16 +4,11 @@
 #include "control.h"
 #include "motor.h"
 
-extern volatile float    steer_kp_min;
+extern volatile float    steer_kp;
 volatile uint8_t menu_fine_step = 0;
 
-extern volatile float    steer_kp_max;
-extern volatile float    steer_kp_e_sat;
 extern volatile float    steer_kd;
 extern volatile float    steer_d_filt_alpha;
-extern volatile uint16_t curve_duty;
-extern volatile uint16_t straight_duty;
-extern volatile int16_t  straight_judge;
 extern volatile int16_t  image_threshold;
 extern volatile uint8_t  image_cross_fill;
 extern volatile uint16_t steer_w_duty_ref;
@@ -35,37 +30,32 @@ typedef enum { NAV_LIST, NAV_EDIT, NAV_PRESET } nav_state_e;
 typedef struct
 {
     const char *name;
-    float    kp_min;
-    float    kp_max;
-    float    kp_e_sat;
+    float    kp;
     float    kd;
     float    d_alpha;
-    uint16_t curve_duty;
-    uint16_t str_duty;
     int16_t  threshold;
     uint8_t  cross_fill;
     uint16_t w_ref;
     uint16_t duty;
-    int16_t  st_judge;
     uint16_t stop_time;
 } preset_t;
 
 static const preset_t s_presets[PRESET_COUNT] = {
     { "Low  (tested)",
-      PRESET_LOW_KP_MIN, PRESET_LOW_KP_MAX, PRESET_LOW_KP_E_SAT, PRESET_LOW_KD,
-      PRESET_LOW_D_ALPHA, PRESET_LOW_CURVE_DUTY,
-      PRESET_LOW_STR_DUTY, PRESET_LOW_THRESHOLD, PRESET_LOW_CROSS_FILL,
-      PRESET_LOW_W_REF, PRESET_LOW_DUTY, PRESET_LOW_ST_JUDGE, PRESET_LOW_STOP_TIME },
+      PRESET_LOW_KP, PRESET_LOW_KD,
+      PRESET_LOW_D_ALPHA,
+      PRESET_LOW_THRESHOLD, PRESET_LOW_CROSS_FILL,
+      PRESET_LOW_W_REF, PRESET_LOW_DUTY, PRESET_LOW_STOP_TIME },
     { "Mid  (tested)",
-      PRESET_MID_KP_MIN, PRESET_MID_KP_MAX, PRESET_MID_KP_E_SAT, PRESET_MID_KD,
-      PRESET_MID_D_ALPHA, PRESET_MID_CURVE_DUTY,
-      PRESET_MID_STR_DUTY, PRESET_MID_THRESHOLD, PRESET_MID_CROSS_FILL,
-      PRESET_MID_W_REF, PRESET_MID_DUTY, PRESET_MID_ST_JUDGE, PRESET_MID_STOP_TIME },
+      PRESET_MID_KP, PRESET_MID_KD,
+      PRESET_MID_D_ALPHA,
+      PRESET_MID_THRESHOLD, PRESET_MID_CROSS_FILL,
+      PRESET_MID_W_REF, PRESET_MID_DUTY, PRESET_MID_STOP_TIME },
     { "High (TODO)",
-      PRESET_HIGH_KP_MIN, PRESET_HIGH_KP_MAX, PRESET_HIGH_KP_E_SAT, PRESET_HIGH_KD,
-      PRESET_HIGH_D_ALPHA, PRESET_HIGH_CURVE_DUTY,
-      PRESET_HIGH_STR_DUTY, PRESET_HIGH_THRESHOLD, PRESET_HIGH_CROSS_FILL,
-      PRESET_HIGH_W_REF, PRESET_HIGH_DUTY, PRESET_HIGH_ST_JUDGE, PRESET_HIGH_STOP_TIME },
+      PRESET_HIGH_KP, PRESET_HIGH_KD,
+      PRESET_HIGH_D_ALPHA,
+      PRESET_HIGH_THRESHOLD, PRESET_HIGH_CROSS_FILL,
+      PRESET_HIGH_W_REF, PRESET_HIGH_DUTY, PRESET_HIGH_STOP_TIME },
 };
 
 static nav_state_e       s_nav;
@@ -276,18 +266,13 @@ void menu_action_defaults(void)
 static void apply_preset(const preset_t *p)
 {
     apply_defaults();
-    steer_kp_min       = p->kp_min;
-    steer_kp_max       = p->kp_max;
-    steer_kp_e_sat     = p->kp_e_sat;
+    steer_kp           = p->kp;
     steer_kd           = p->kd;
     steer_d_filt_alpha = p->d_alpha;
-    curve_duty         = p->curve_duty;
-    straight_duty      = p->str_duty;
     image_threshold    = p->threshold;
     image_cross_fill   = p->cross_fill;
     steer_w_duty_ref   = p->w_ref;
     drive_duty_base    = p->duty;
-    straight_judge     = p->st_judge;
     drive_stop_time_s  = p->stop_time;
 }
 

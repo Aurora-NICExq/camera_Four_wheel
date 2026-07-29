@@ -130,8 +130,6 @@ int core0_main(void) {
       ips200_show_uint(136, IMG_H + 20, out.duty, 4);
       ips200_show_string(0, IMG_H + 36, "LST");
       ips200_show_uint(32, IMG_H + 36, g_track.both_lost_rows, 3);
-      ips200_show_string(104, IMG_H + 36, "STR");
-      ips200_show_uint(136, IMG_H + 36, out.straight, 1);
       ips200_show_string(0, IMG_H + 52, "TH");
       ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
       ips200_show_string(104, IMG_H + 52, "CRS");

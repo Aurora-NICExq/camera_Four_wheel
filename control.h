@@ -12,7 +12,6 @@ typedef struct
     uint16_t duty;
     int16_t  error_used;
     uint16_t duty_target;
-    uint8_t  straight;   /* 本帧直道确认结果,供调试显示 */
     uint16_t rows_cap;   /* 本帧行数安全网上限,供调试显示:限速何时介入不再是隐形的 */
 } control_out_t;
 
