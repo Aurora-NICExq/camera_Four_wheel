@@ -109,12 +109,117 @@ static void binarize(const uint8_t img[IMG_H][IMG_W], uint8_t th)
     }
 }
 
+static int clamp_scan_col(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
+static int16_t scan_right_border(int row, int seed)
+{
+    int j;
+    int lo;
+    int hi;
+    int max_j = IMG_W - 1 - 2;
+
+    seed = clamp_scan_col(seed, TH18_COL_MARGIN, max_j);
+    lo   = clamp_scan_col(seed - BORDER_SEARCH_RANGE, TH18_COL_MARGIN, max_j);
+    hi   = clamp_scan_col(seed + BORDER_SEARCH_RANGE, TH18_COL_MARGIN, max_j);
+
+    for (j = seed; j <= hi; j++)
+    {
+        if (image_bin[row][j] == IMG_WHITE &&
+            image_bin[row][j + 1] == IMG_BLACK &&
+            image_bin[row][j + 2] == IMG_BLACK)
+        {
+            right_lost_flag[row] = 0;
+            return (int16_t)j;
+        }
+    }
+    for (j = seed - 1; j >= lo; j--)
+    {
+        if (image_bin[row][j] == IMG_WHITE &&
+            image_bin[row][j + 1] == IMG_BLACK &&
+            image_bin[row][j + 2] == IMG_BLACK)
+        {
+            right_lost_flag[row] = 0;
+            return (int16_t)j;
+        }
+    }
+    right_lost_flag[row] = 1;
+    return (int16_t)seed;
+}
+
+static int16_t scan_left_border(int row, int seed)
+{
+    int j;
+    int lo;
+    int hi;
+    int min_j = 2;
+
+    seed = clamp_scan_col(seed, min_j, IMG_W - 1 - TH18_COL_MARGIN);
+    lo   = clamp_scan_col(seed - BORDER_SEARCH_RANGE, min_j, IMG_W - 1 - TH18_COL_MARGIN);
+    hi   = clamp_scan_col(seed + BORDER_SEARCH_RANGE, min_j, IMG_W - 1 - TH18_COL_MARGIN);
+
+    for (j = seed; j >= lo; j--)
+    {
+        if (image_bin[row][j] == IMG_WHITE &&
+            image_bin[row][j - 1] == IMG_BLACK &&
+            image_bin[row][j - 2] == IMG_BLACK)
+        {
+            left_lost_flag[row] = 0;
+            return (int16_t)j;
+        }
+    }
+    for (j = seed + 1; j <= hi; j++)
+    {
+        if (image_bin[row][j] == IMG_WHITE &&
+            image_bin[row][j - 1] == IMG_BLACK &&
+            image_bin[row][j - 2] == IMG_BLACK)
+        {
+            left_lost_flag[row] = 0;
+            return (int16_t)j;
+        }
+    }
+    left_lost_flag[row] = 1;
+    return (int16_t)seed;
+}
+
+static uint8_t cross_bottom_track_ok(void)
+{
+    int row;
+    int bottom_n    = 0;
+    int bottom_blost = 0;
+    int end_row     = IMG_H - 20;
+
+    if (end_row < IMG_H - search_stop_line)
+    {
+        end_row = IMG_H - search_stop_line;
+    }
+
+    for (row = IMG_H - 1; row >= end_row; row--)
+    {
+        bottom_n++;
+        if (left_lost_flag[row] && right_lost_flag[row])
+        {
+            bottom_blost++;
+        }
+    }
+    if (bottom_n <= 0)
+    {
+        return 0;
+    }
+
+    /* 弯底仍有边线:下半区双边丢线 <30% → 弯道,跳过十字补线 */
+    return (uint8_t)((bottom_blost * 100) < (bottom_n * 30));
+}
+
 static void longest_white_column(void)
 {
     int i, j;
     int start_column = TH18_COL_MARGIN;
     int end_column = IMG_W - TH18_COL_MARGIN;
-    int left_border = 0, right_border = 0;
 
     longest_white_left_len = 0;
     longest_white_left_col = 0;
@@ -181,47 +286,26 @@ static void longest_white_column(void)
         search_stop_line = IMG_H;
     }
 
-    for (i = IMG_H - 1; i >= IMG_H - search_stop_line; i--)
     {
-        for (j = longest_white_right_col; j <= IMG_W - 1 - 2; j++)
+        int16_t lb;
+        int16_t rb;
+
+        i = IMG_H - 1;
+        rb = scan_right_border(i, (int)longest_white_right_col);
+        lb = scan_left_border(i, (int)longest_white_left_col);
+        right_line[i] = rb;
+        left_line[i]  = lb;
+
+        for (i = IMG_H - 2; i >= IMG_H - search_stop_line; i--)
         {
-            if (image_bin[i][j] == IMG_WHITE &&
-                image_bin[i][j + 1] == IMG_BLACK &&
-                image_bin[i][j + 2] == IMG_BLACK)
-            {
-                right_border = j;
-                right_lost_flag[i] = 0;
-                break;
-            }
-            else if (j >= IMG_W - 1 - 2)
-            {
-                right_border = j;
-                right_lost_flag[i] = 1;
-                break;
-            }
+            rb = scan_right_border(i, (int)right_line[i + 1]);
+            lb = scan_left_border(i, (int)left_line[i + 1]);
+            right_line[i] = rb;
+            left_line[i]  = lb;
         }
-        for (j = longest_white_left_col; j >= 2; j--)
-        {
-            if (image_bin[i][j] == IMG_WHITE &&
-                image_bin[i][j - 1] == IMG_BLACK &&
-                image_bin[i][j - 2] == IMG_BLACK)
-            {
-                left_border = j;
-                left_lost_flag[i] = 0;
-                break;
-            }
-            else if (j <= 2)
-            {
-                left_border = j;
-                left_lost_flag[i] = 1;
-                break;
-            }
-        }
-        left_line[i] = (int16_t)left_border;
-        right_line[i] = (int16_t)right_border;
     }
 
-    for (i = IMG_H - 1; i >= 0; i--)
+    for (i = IMG_H - 1; i >= IMG_H - search_stop_line; i--)
     {
         if (left_lost_flag[i] && right_lost_flag[i])
         {
@@ -483,6 +567,10 @@ static void cross_detect(track_info_t *ti)
     right_down_find = 0;
 
     if (both_lost_time < TH18_CROSS_BOTH_LOST_MIN)
+    {
+        return;
+    }
+    if (cross_bottom_track_ok())
     {
         return;
     }

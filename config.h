@@ -47,6 +47,9 @@
 
 #define TH18_COL_MARGIN          (20)
 #define TH18_CROSS_BOTH_LOST_MIN (10)
+/* 逐行边线搜索:以上一行边线为种子,左右各搜 BORDER_SEARCH_RANGE 列。
+ * 旧实现每行都从最长白列起搜,弯里赛道平移后搜到画面边缘,中线恒在中心。 */
+#define BORDER_SEARCH_RANGE      (40)
 #define IMG_FILTER_SUM_MAX (255 * 5)
 #define IMG_FILTER_SUM_MIN (255 * 2)
 
