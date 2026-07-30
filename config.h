@@ -92,7 +92,7 @@
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
 /* 曾有 ROWS_CAP 行数限速表与 valid_rows 字段,已删:速度只由 Duty;
- * 丢线保护改看前瞻 look_rows==0;触发后锁存停机,Armed OFF 才复位。 */
+ * 丢线保护改看前瞻 look_rows==0,线回来后允许继续跑(不锁存)。 */
 #define FAILSAFE_FRAMES (10)
 #define FAILSAFE_SEVERE_FRAMES (2)
 

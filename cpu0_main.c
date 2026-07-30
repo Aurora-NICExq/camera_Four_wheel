@@ -31,7 +31,6 @@ int core0_main(void) {
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
-  uint8_t failsafe_latched = 0; /* 前瞻丢线触发后锁存,须 Armed OFF 才解除 */
   uint32_t telem_frame = 0;
   control_out_t out = {0};
   uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
@@ -78,10 +77,7 @@ int core0_main(void) {
         }
       } else {
         fail_cnt = 0;
-        /* 锁存后即使线回来也不自动 drive_en=1 */
-        if (!failsafe_latched) {
-          drive_en = 1;
-        }
+        drive_en = 1;
       }
       if (severe_image) {
         if (severe_fail_cnt < FAILSAFE_SEVERE_FRAMES) {
@@ -92,11 +88,7 @@ int core0_main(void) {
       }
       if (fail_cnt >= FAILSAFE_FRAMES ||
           severe_fail_cnt >= FAILSAFE_SEVERE_FRAMES) {
-        if (drive_en) {
-          control_init(); /* 仅在切入锁存时清一次 PD,避免每帧清零 */
-        }
         drive_en = 0;
-        failsafe_latched = 1;
       }
     }
 
@@ -142,19 +134,16 @@ int core0_main(void) {
       }
     } else {
       motor_reset();
-      if (drive_en) {
+      if (!drive_en) {
+        control_init();
+      } else {
         control_duty_reset();
       }
-      /* failsafe 锁存中:电机已停,PD 在切入时清过,不再每帧 control_init */
     }
 
     if (!drive_armed) {
       armed_t0_set = 0;
       drive_timed_out = 0;
-      failsafe_latched = 0;
-      fail_cnt = 0;
-      severe_fail_cnt = 0;
-      drive_en = 1;
     }
 
     if (menu_camera_view()) {
