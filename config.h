@@ -46,9 +46,6 @@
 /* 最长白列巡线:列扫描找自底向上连续白像素最长的列作为左右搜索基准 */
 #define TH18_COL_MARGIN          (20)  /* 列扫描左右留白,避开图像边缘 */
 #define TH18_CROSS_BOTH_LOST_MIN (10)  /* 十字检测:双边丢线行数下限 */
-/* 逐行边线搜索:以上一行边线为种子,左右各搜 BORDER_SEARCH_RANGE 列。
- * 旧实现每行都从最长白列起搜,弯里赛道平移后搜到画面边缘,中线恒在中心。 */
-#define BORDER_SEARCH_RANGE      (40)
 #define IMG_FILTER_SUM_MAX (255 * 5)   /* 3x3 去噪:邻域白点足够多则填白 */
 #define IMG_FILTER_SUM_MIN (255 * 2)   /* 邻域白点过少则填黑 */
 
