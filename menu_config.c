@@ -31,6 +31,7 @@ const menu_item_t menu_items[] = {
     MENU_ACTION("Cam Calib",    menu_action_cam_calib),
     MENU_ACTION("Align Test",   menu_action_align_test),
     MENU_ACTION("Motor Test",   menu_action_motor_test),
+    MENU_ACTION("UART Test",    menu_action_uart_test),
     MENU_ACTION("Restore Def",  menu_action_defaults),
 };
 const uint16_t menu_item_count = (uint16_t)(sizeof(menu_items) / sizeof(menu_items[0]));

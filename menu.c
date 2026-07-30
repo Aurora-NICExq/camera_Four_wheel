@@ -64,6 +64,7 @@ static uint8_t           s_camera_view;
 static uint8_t           s_calib_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
+static uint8_t           s_uart_test_mode;      // 无线串口链路自检页
 static uint8_t           s_preset_cursor;       // 预设子页面选中档位
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
@@ -348,6 +349,29 @@ void menu_action_motor_test(void)
     menu_port_draw_text(0, 4, "BACK: stop", MENU_STYLE_NORMAL);
 }
 
+/* 无线串口自检页。静态标签在这里画一次,动态数值由 cpu0_main 按 5Hz 刷新。
+   进入即 motor_stop,并且 cpu0_main 会在该模式下强制 motor_reset——
+   自检是台架工具,不允许车在这个页面里动 */
+void menu_action_uart_test(void)
+{
+    s_align_test_mode = 0;
+    s_motor_test_mode = 0;
+    s_camera_view     = 0;
+    s_calib_view      = 0;
+    s_uart_test_mode  = 1;
+    motor_stop();
+    menu_port_clear();
+    draw_title("UART TEST");
+    menu_port_draw_text(0, 2, "BAUD", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 3, "SENT", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 4, "DROP", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 5, "QLEN", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 6, "RTS",  MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 8, "PC: SeekFree wireless", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 9, "    assistant, same baud", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 11, "BACK: exit", MENU_STYLE_NORMAL);
+}
+
 void menu_action_reset(void)
 {
     control_reset();
@@ -375,6 +399,11 @@ uint8_t menu_motor_test_mode(void)
     return s_motor_test_mode;
 }
 
+uint8_t menu_uart_test_mode(void)
+{
+    return s_uart_test_mode;
+}
+
 void menu_init(void)
 {
     menu_port_init();
@@ -395,6 +424,16 @@ static void menu_handle_key(const menu_key_event_t *ev)
         {
             s_motor_test_mode = 0;
             motor_stop();
+            draw_list_full();
+        }
+        return;
+    }
+
+    if (s_uart_test_mode)
+    {
+        if (ev->key == MENU_KEY_BACK)
+        {
+            s_uart_test_mode = 0;
             draw_list_full();
         }
         return;

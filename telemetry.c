@@ -47,14 +47,14 @@ static uint8_t queue_push(const uint8_t *data, uint16_t len)
     return 1u;
 }
 
-static void queue_push_line(const char *line)
+static uint8_t queue_push_line(const char *line)
 {
     uint16_t len = 0u;
     while (line[len] != '\0')
     {
         len++;
     }
-    (void)queue_push((const uint8_t *)line, len);
+    return queue_push((const uint8_t *)line, len);
 }
 
 void telemetry_init(void)
@@ -102,6 +102,54 @@ void telemetry_pump(void)
         uart_write_buffer(WIRELESS_UART_INDEX, chunk, n);
         budget = (uint16_t)(budget - n);
     }
+}
+
+/* ---------------- 无线串口链路自检 ----------------
+ * 走的是与 CSV 遥测完全相同的通路:同一条有界队列 + telemetry_pump 的
+ * RTS 流控。不另开第二条 UART 写入路径——否则自检"通过"也不能证明
+ * 遥测能通,那就失去意义了。
+ * 返回 1 = 已入队;0 = 队列满被丢弃,说明链路没在排空
+ * (RTS 被模块拉高,或 PC 侧没有接收) */
+uint8_t telemetry_test_send(uint32_t seq, uint32_t t_ms)
+{
+    char buf[80];
+    int  len = snprintf(buf, sizeof(buf),
+                        "SEEKFREE WIRELESS TEST seq=%lu t=%lums baud=%lu\r\n",
+                        (unsigned long)seq, (unsigned long)t_ms,
+                        (unsigned long)TELEM_UART_BAUD);
+
+    if (len <= 0)
+    {
+        return 0u;
+    }
+    if (len >= (int)sizeof(buf))
+    {
+        len = (int)sizeof(buf) - 1;
+    }
+    return queue_push((const uint8_t *)buf, (uint16_t)len);
+}
+
+/* 进入测试页时发一次。RULER 行是固定的可打印 ASCII 序列:
+   波特率不匹配时它会变成乱码,比盯计数器更容易判断问题在哪一层 */
+uint8_t telemetry_test_banner(void)
+{
+    uint8_t ok;
+
+    ok  = queue_push_line("\r\n==== SEEKFREE WIRELESS UART TEST ====\r\n");
+    ok &= queue_push_line("RULER 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ\r\n");
+    return ok;
+}
+
+uint16_t telemetry_queue_depth(void)
+{
+    return s_count;
+}
+
+/* 1 = 模块正在用 RTS 要求我们停发(telemetry_pump 会因此暂停)。
+   持续为 1 且 QLEN 涨满 = 模块没接好或 PC 侧没在收 */
+uint8_t telemetry_rts_blocked(void)
+{
+    return gpio_get_level(WIRELESS_UART_RTS_PIN) ? 1u : 0u;
 }
 
 void telemetry_update(uint32_t t_ms, uint32_t frame,

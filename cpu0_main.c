@@ -34,6 +34,9 @@ int core0_main(void) {
   uint8_t drive_en = 1;
   uint32_t telem_frame = 0;
   control_out_t out = {0};
+  /* UART Test 页状态。计时一律用 hal_time_us,不用帧计数 */
+  uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
+  uint8_t ut_active_prev = 0, ut_tick = 0;
 
   while (TRUE) {
     menu_task();
@@ -70,14 +73,41 @@ int core0_main(void) {
     control_update(&g_track, &out);
 
     telem_frame++;
-    if (drive_armed)
+    /* UART Test 期间不发 CSV:两种输出交织在一条链路上会让自检结果没法读 */
+    if (drive_armed && !menu_uart_test_mode())
     {
       uint32_t telem_t_ms = armed_elapsed_us / 1000u;
       telemetry_update(telem_t_ms, telem_frame, &g_track, &out);
     }
     telemetry_pump();
 
-    if (menu_motor_test_mode()) {
+    ut_tick = 0;
+    if (menu_uart_test_mode()) {
+      uint32_t now_us = hal_time_us();
+      if (!ut_active_prev) {
+        ut_active_prev = 1;
+        ut_seq = 0;
+        ut_drop = 0;
+        ut_last_us = now_us;
+        ut_tick = 1;
+        if (!telemetry_test_banner()) {
+          ut_drop++;
+        }
+      } else if ((uint32_t)(now_us - ut_last_us) >= UART_TEST_PERIOD_US) {
+        ut_last_us = now_us;
+        ut_seq++;
+        ut_tick = 1;
+        if (!telemetry_test_send(ut_seq, now_us / 1000u)) {
+          ut_drop++;
+        }
+      }
+    } else {
+      ut_active_prev = 0;
+    }
+
+    if (menu_uart_test_mode()) {
+      motor_reset(); /* 自检页禁止整车动作,即使 Armed 还是 ON */
+    } else if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
     } else if (menu_align_test_mode()) {
       motor_apply_servo_only(out.servo_pwm);
@@ -150,8 +180,18 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
       ips200_show_string(104, IMG_H + 52, "CRS");
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
-      /* IMG_H+68 那一行原来显示 CAP(行数限速上限),随 rows_duty_cap 一并删除。
-         该行现在空着,要加就加 err_hold */
+      ips200_show_string(0, IMG_H + 68, "HLD");
+      ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
+      ips200_show_string(104, IMG_H + 68, "N/F");
+      ips200_show_uint(136, IMG_H + 68, g_track.near_rows, 3);
+      ips200_show_uint(168, IMG_H + 68, g_track.far_rows, 3);
+    } else if (menu_uart_test_mode() && ut_tick) {
+      /* 只在发送那一刻刷新(5Hz),静态标签由 menu_action_uart_test 画过 */
+      menu_port_draw_uint(8, 2, TELEM_UART_BAUD, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 3, ut_seq, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 4, ut_drop, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 5, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 6, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
     }
     mt9v03x_finish_flag = 0;
   }

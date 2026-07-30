@@ -117,6 +117,11 @@
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
+/* 菜单 UART Test 页发送周期。按挂钟时间计(hal_time_us),不用帧计数——
+ * 主循环会因图像处理/屏幕刷新掉帧,帧计数出来的"5Hz"是不准的。
+ * 5Hz 足够人在 PC 助手里看清序号连续性,又不会把队列打满 */
+#define UART_TEST_PERIOD_US (200000u)
+
 /* 无线 CSV 遥测:每 TELEM_DIV 帧发一行,约 50fps 下 10Hz */
 #define TELEM_DIV (5u)
 /* 无线模块波特率:115200 对当前 CSV 遥测(约10Hz)足够。须与 PC 助手、
