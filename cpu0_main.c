@@ -191,9 +191,10 @@ int core0_main(void) {
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
       ips200_show_string(0, IMG_H + 68, "HLD");
       ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
-      ips200_show_string(104, IMG_H + 68, "N/F");
-      ips200_show_uint(136, IMG_H + 68, g_track.near_rows, 3);
-      ips200_show_uint(168, IMG_H + 68, g_track.far_rows, 3);
+      ips200_show_string(88, IMG_H + 68, "N/F/A");
+      ips200_show_uint(136, IMG_H + 68, g_track.near_rows, 2);
+      ips200_show_uint(152, IMG_H + 68, g_track.far_rows, 2);
+      ips200_show_uint(168, IMG_H + 68, g_track.aim_rows, 2);
     }
     mt9v03x_finish_flag = 0;
   }

@@ -32,6 +32,12 @@
 #define STEER_FAR_ROW_HI (90)
 #define STEER_FAR_W_PCT  (65)
 
+/* 远段丢光(far_n=0)时的瞄准窗口:以可见段 STEER_AIM_ROW_PCT% 行为中心,
+ * 上下各 STEER_AIM_WIN_HALF 行均匀平均。满视野 hi=90 时中心≈49,与旧等效瞄准行~51 对齐;
+ * 视野收缩时中心跟着缩,弯里不再退回近段(车底小偏差)。 */
+#define STEER_AIM_ROW_PCT  (55)
+#define STEER_AIM_WIN_HALF (3)
+
 
 #define TRACK_HALF_W_FALLBACK (60)
 

@@ -21,6 +21,7 @@ typedef struct
 
     uint8_t  near_rows;
     uint8_t  far_rows;
+    uint8_t  aim_rows;
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 

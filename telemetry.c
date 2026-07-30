@@ -203,7 +203,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
 
 
         if (queue_push_line(
-                "# t_ms,err,hold,srv,dty,tgt,row,nr,fr,lst,th,crs,"
+                "# t_ms,err,hold,srv,dty,tgt,row,nr,fr,ar,lst,th,crs,"
                 "kp100,kd100,farw\r\n"))
         {
 
@@ -217,7 +217,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     }
 
     len = snprintf(buf, sizeof(buf),
-                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
@@ -227,6 +227,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
                    (unsigned)ti->valid_rows,
                    (unsigned)ti->near_rows,
                    (unsigned)ti->far_rows,
+                   (unsigned)ti->aim_rows,
                    (unsigned)ti->both_lost_rows,
                    (unsigned)ti->threshold,
                    (unsigned)ti->cross_valid,

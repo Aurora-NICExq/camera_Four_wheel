@@ -628,6 +628,50 @@ static void export_track(track_info_t *ti)
 }
 
 
+static uint8_t aim_window_avg(const track_info_t *ti, uint8_t hi, int32_t *err_out)
+{
+    uint8_t aim;
+    uint8_t lo;
+    uint8_t hi_r;
+    uint8_t r;
+    int32_t acc = 0;
+    uint8_t n   = 0;
+
+    if (hi == 0u)
+    {
+        return 0;
+    }
+
+    aim = (uint8_t)(((uint16_t)hi * (uint16_t)STEER_AIM_ROW_PCT) / 100u);
+    if (aim >= hi)
+    {
+        aim = (uint8_t)(hi - 1u);
+    }
+
+    lo = (aim > STEER_AIM_WIN_HALF) ? (uint8_t)(aim - STEER_AIM_WIN_HALF) : 0u;
+    hi_r = (uint8_t)(aim + STEER_AIM_WIN_HALF);
+    if (hi_r >= hi)
+    {
+        hi_r = (uint8_t)(hi - 1u);
+    }
+
+    for (r = lo; r <= hi_r; r++)
+    {
+        if (ti->left_lost[r] && ti->right_lost[r])
+        {
+            continue;
+        }
+        acc += (int32_t)ti->mid[r] - IMG_CENTER;
+        n++;
+    }
+
+    if (n > 0u)
+    {
+        *err_out = acc / (int32_t)n;
+    }
+    return n;
+}
+
 static int16_t two_band_error(track_info_t *ti)
 {
     int32_t near_acc = 0;
@@ -639,6 +683,8 @@ static int16_t two_band_error(track_info_t *ti)
     uint8_t r;
     int32_t err;
     int32_t fw;
+    int32_t aim_err = 0;
+    uint8_t aim_n;
 
 
     hi = (ti->valid_rows < (uint8_t)STEER_FAR_ROW_HI)
@@ -683,6 +729,8 @@ static int16_t two_band_error(track_info_t *ti)
 
     ti->near_rows = near_n;
     ti->far_rows  = far_n;
+    aim_n = aim_window_avg(ti, hi, &aim_err);
+    ti->aim_rows = aim_n;
 
     if (near_n == 0u && far_n == 0u)
     {
@@ -704,9 +752,14 @@ static int16_t two_band_error(track_info_t *ti)
 
     if (far_n == 0u)
     {
-
-
-        err = near_acc / (int32_t)near_n;
+        if (aim_n > 0u)
+        {
+            err = aim_err;
+        }
+        else
+        {
+            err = near_acc / (int32_t)near_n;
+        }
     }
     else if (near_n == 0u)
     {
