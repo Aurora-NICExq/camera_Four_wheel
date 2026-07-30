@@ -1,4 +1,4 @@
-/* motor.c - servo/motor PWM HAL (4-PWM H-bridge) */
+/* motor.c */
 #include "zf_common_headfile.h"
 #include "pins.h"
 #include "config.h"
@@ -40,8 +40,6 @@ void motor_apply(uint16_t servo_pwm, uint16_t duty)
     pwm_set_duty(PIN_MOTOR_RIGHT_IN1, duty);
 }
 
-/* 只开软件命名为 LEFT 的两路(IN1 前进 / IN2=0),RIGHT 全停。
- * 用来核对 pins.h 标签是否对应车体左侧轮 */
 void motor_apply_left_only(uint16_t duty)
 {
     if (duty > PWM_DUTY_MAX) { duty = PWM_DUTY_MAX; }

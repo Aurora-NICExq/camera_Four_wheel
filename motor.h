@@ -10,7 +10,7 @@ void motor_hw_init(void);
 void motor_stop(void);
 void motor_reset(void);
 void motor_apply(uint16_t servo_pwm, uint16_t duty);
-void motor_apply_left_only(uint16_t duty); /* 只驱 LEFT 两路,辨左右轮 */
+void motor_apply_left_only(uint16_t duty);
 void motor_apply_servo_only(uint16_t servo_pwm);
 
 uint32_t hal_time_us(void);

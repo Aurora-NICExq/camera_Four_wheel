@@ -168,6 +168,10 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
       ips200_show_string(104, IMG_H + 68, "FAR");
       ips200_show_uint(136, IMG_H + 68, steer_look_far, 3);
+      ips200_show_string(0, IMG_H + 84, "F2L");
+      ips200_show_uint(32, IMG_H + 84, image_fill_to_look, 1);
+      ips200_show_string(104, IMG_H + 84, "FIL");
+      ips200_show_uint(136, IMG_H + 84, g_track.fill_from_l, 3);
     } else if (menu_uart_test_mode() && ut_tick) {
       menu_port_draw_uint(8, 2, telemetry_wireless_ok(), 7, MENU_STYLE_NORMAL);
       menu_port_draw_uint(8, 3, telemetry_tx_bytes(), 7, MENU_STYLE_NORMAL);

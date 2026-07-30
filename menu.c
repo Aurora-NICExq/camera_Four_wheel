@@ -1,4 +1,4 @@
-/* menu.c - data-driven tune menu engine */
+/* menu.c */
 #include "menu.h"
 #include "menu_port.h"
 #include "control.h"
@@ -25,8 +25,6 @@ extern volatile uint16_t steer_look_far;
 
 typedef enum { NAV_LIST, NAV_EDIT, NAV_PRESET } nav_state_e;
 
-/* 三档预设。一次写全每一项:未列出的项由 apply_defaults 兜底,
-   保证选中任一档进入的都是完整、可复现的状态 */
 #define PRESET_COUNT (3)
 
 typedef struct
@@ -123,7 +121,7 @@ static void draw_title(const char *txt)
 static void draw_title_edit(const char *name)
 {
     char t[MENU_COLS + 1];
-    const char *pfx = menu_fine_step ? "[F] " : "[E] "; /* F 提示当前是细步进 */
+    const char *pfx = menu_fine_step ? "[F] " : "[E] ";
     uint8_t i, j = 0;
     for (i = 0; i < MENU_COLS; i++) t[i] = ' ';
     t[MENU_COLS] = '\0';
@@ -226,9 +224,6 @@ static void edit_adjust(int8_t dir, uint8_t repeat)
     const menu_item_t *it = s_edit_item;
     float step = it->step;
 
-    /* Fine Step:短按细调、长按仍是原步长(0.1×10=1),一个开关覆盖四档精度。
-       下限按类型钳住——浮点不低于显示精度,整型不低于 1,
-       否则按键按下去数值不变,看起来像失灵 */
     if (menu_fine_step)
     {
         float lo = (it->type == ITEM_FLOAT) ? FINE_MIN_FLOAT : FINE_MIN_INT;
@@ -264,9 +259,6 @@ void menu_action_defaults(void)
     redraw_visible_values();
 }
 
-/* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再逐项覆盖 */
-/* 应用一档预设:先全量恢复默认(含 Armed=OFF、Fine Step=OFF),再逐项覆盖,
-   保证进入的是完整可复现的状态,不受此前手动改动残留影响 */
 static void apply_preset(const preset_t *p)
 {
     apply_defaults();
@@ -280,8 +272,6 @@ static void apply_preset(const preset_t *p)
     drive_stop_time_s  = p->stop_time;
 }
 
-/* 预设子页面:名字缩进两格,选中行前加 "> ",
-   不像主列表那样覆盖掉名字前两个字符 */
 static void draw_preset_page(void)
 {
     char row[MENU_COLS + 1];
@@ -345,7 +335,7 @@ void menu_action_motor_test(void)
     menu_port_draw_text(0, 4, "BACK: stop", MENU_STYLE_NORMAL);
 }
 
-/* 只开 pins.h 里 LEFT 的两路 PWM。转的是哪侧轮 = 软件 LEFT 对应哪侧 */
+// 只开 pins.h 里 LEFT 的两路 PWM。转的是哪侧轮 = 软件 LEFT 对应哪侧
 void menu_action_left_test(void)
 {
     s_align_test_mode = 0;
@@ -488,7 +478,7 @@ static void menu_handle_key(const menu_key_event_t *ev)
             apply_preset(&s_presets[s_preset_cursor]);
             s_nav = NAV_LIST;
             draw_list_full();
-            draw_title(s_presets[s_preset_cursor].name); /* 标题回显应用了哪一档 */
+            draw_title(s_presets[s_preset_cursor].name);
         }
         else if (ev->key == MENU_KEY_BACK)
         {

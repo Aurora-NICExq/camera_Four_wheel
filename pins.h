@@ -1,4 +1,4 @@
-/* pins.h - pin/channel map */
+/* pins.h */
 #ifndef PINS_H
 #define PINS_H
 

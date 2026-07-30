@@ -1,4 +1,4 @@
-/* image.c - 八邻域双边巡线 */
+/* image.c */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -6,11 +6,12 @@
 
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
+volatile uint8_t image_fill_to_look = EIGHTN_CROSS_FILL_TO_LOOK_DEFAULT;
 volatile uint16_t steer_look_far = STEER_LOOK_FAR_DEFAULT;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
-#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
+#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir)))
 
 static uint8_t  image_bin[IMG_H][IMG_W];
 static uint8_t  l_border[IMG_H];
@@ -51,6 +52,8 @@ static void init_cross_meta(track_info_t *ti)
     ti->cross_lo = 0;
     ti->cross_hi = 0;
     ti->inflect_row = 0xFF;
+    ti->fill_from_l = 0;
+    ti->fill_from_r = 0;
     for (r = 0; r < IMG_H; r++)
     {
         ti->cross_filled[r] = 0;
@@ -422,6 +425,7 @@ static void get_right(uint16_t total_r)
     }
 }
 
+/* 八邻域参考：Slope_Calculate + calculate_s_i + cross_fill（十字补线和最小二乘法.txt） */
 static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
 {
     float xsum = 0.0f;
@@ -430,6 +434,7 @@ static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
     float x2sum = 0.0f;
     int16_t i;
     float result = 0.0f;
+    static float result_last;
 
     for (i = (int16_t)begin; i < (int16_t)end; i++)
     {
@@ -439,25 +444,28 @@ static float slope_calculate(uint8_t begin, uint8_t end, const uint8_t *border)
         x2sum += (float)i * (float)i;
     }
 
+    if (((float)(end - begin) * x2sum - xsum * xsum) != 0.0f)
     {
-        float denom = ((float)(end - begin) * x2sum - xsum * xsum);
-        if (denom != 0.0f)
-        {
-            result = (((float)(end - begin) * xysum - xsum * ysum) / denom);
-        }
+        result = (((float)(end - begin) * xysum - xsum * ysum)
+                  / ((float)(end - begin) * x2sum - xsum * xsum));
+        result_last = result;
+    }
+    else
+    {
+        result = result_last;
     }
     return result;
 }
 
-static void calculate_s_i(uint8_t start, uint8_t end, const uint8_t *border,
+static void calculate_s_i(uint8_t start, uint8_t end, uint8_t *border,
                           float *slope_rate, float *intercept)
 {
     uint16_t i;
     uint16_t num = 0;
+    uint16_t xsum = 0;
+    uint16_t ysum = 0;
     float x_average;
     float y_average;
-    uint32_t xsum = 0;
-    uint32_t ysum = 0;
 
     for (i = start; i < end; i++)
     {
@@ -468,8 +476,8 @@ static void calculate_s_i(uint8_t start, uint8_t end, const uint8_t *border,
 
     if (num)
     {
-        x_average = (float)xsum / (float)num;
-        y_average = (float)ysum / (float)num;
+        x_average = (float)(xsum / num);
+        y_average = (float)(ysum / num);
     }
     else
     {
@@ -510,40 +518,73 @@ static void mark_cross_fill_rows(uint8_t y_lo, uint8_t y_hi, track_info_t *ti)
     }
 }
 
+static uint8_t fill_start_row(uint8_t break_row)
+{
+    uint8_t from = (uint8_t)(break_row - EIGHTN_CROSS_SLOPE_NEAR);
+
+    if (image_fill_to_look)
+    {
+        uint16_t far = steer_look_far;
+        uint8_t look_ir;
+
+        if (far > (uint16_t)STEER_LOOK_FAR_MAX)
+        {
+            far = (uint16_t)STEER_LOOK_FAR_MAX;
+        }
+        look_ir = (uint8_t)((uint16_t)(IMG_H - 1u) - far);
+        if (look_ir < hightest_row)
+        {
+            look_ir = hightest_row;
+        }
+        if (look_ir < (uint8_t)EIGHTN_CROSS_FILL_ROW_MIN)
+        {
+            look_ir = (uint8_t)EIGHTN_CROSS_FILL_ROW_MIN;
+        }
+        if (look_ir < from)
+        {
+            from = look_ir;
+        }
+    }
+    return from;
+}
+
 static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti)
 {
-    uint16_t i;
+    uint16_t k;
+    uint8_t i;
+    uint8_t break_num_l = 0;
+    uint8_t break_num_r = 0;
     uint8_t start;
     uint8_t end;
+    uint8_t fill_from;
     float slope_rate = 0.0f;
     float intercept = 0.0f;
-    uint8_t fill_from;
 
     cross_break_l = 0;
     cross_break_r = 0;
     cross_flag = 0;
 
-    for (i = 1; i + 7u < data_stastics_l; i++)
+    for (k = 1; k < data_stastics_l; k++)
     {
-        if (dir_l[i - 1] == 4 && dir_l[i] == 4 &&
-            dir_l[i + 3] == 6 && dir_l[i + 5] == 6 && dir_l[i + 7] == 6)
+        if (dir_l[k - 1] == 4 && dir_l[k] == 4 &&
+            dir_l[k + 3] == 6 && dir_l[k + 5] == 6 && dir_l[k + 7] == 6)
         {
-            cross_break_l = (uint8_t)points_l[i][1];
+            break_num_l = (uint8_t)points_l[k][1];
             break;
         }
     }
 
-    for (i = 1; i + 7u < data_stastics_r; i++)
+    for (k = 1; k < data_stastics_r; k++)
     {
-        if (dir_r[i - 1] == 4 && dir_r[i] == 4 &&
-            dir_r[i + 3] == 6 && dir_r[i + 5] == 6 && dir_r[i + 7] == 6)
+        if (dir_r[k - 1] == 4 && dir_r[k] == 4 &&
+            dir_r[k + 3] == 6 && dir_r[k + 5] == 6 && dir_r[k + 7] == 6)
         {
-            cross_break_r = (uint8_t)points_r[i][1];
+            break_num_r = (uint8_t)points_r[k][1];
             break;
         }
     }
 
-    if (!cross_break_l || !cross_break_r)
+    if (!break_num_l || !break_num_r)
     {
         return;
     }
@@ -554,69 +595,38 @@ static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti)
         return;
     }
 
-    /* 拟合窗口需完整落在图像内(break-SLOPE_BACK 不得下溢,否则越界拟合) */
-    if (cross_break_l <= EIGHTN_CROSS_SLOPE_BACK ||
-        cross_break_r <= EIGHTN_CROSS_SLOPE_BACK)
-    {
-        return;
-    }
-
-    /* 真十字:左右上拐点行号接近,且拐点下方开口接近全宽。
-       弯道拐点同样能凑出 4,4,6,6,6 方向序列,但内侧边界仍在、宽度不足,
-       误补线会把弯道中线拉直、掏空转向误差 */
-    if (my_abs((int)cross_break_l - (int)cross_break_r) > EIGHTN_CROSS_BREAK_DROW)
-    {
-        return;
-    }
-    {
-        uint8_t base = (cross_break_l > cross_break_r) ? cross_break_l : cross_break_r;
-        uint16_t row;
-        uint8_t samples = 0;
-        uint8_t open_cnt = 0;
-        for (row = (uint16_t)base + 2u;
-             row < (uint16_t)base + 12u && row <= (uint16_t)EIGHTN_CROSS_OPEN_ROW_MAX;
-             row++)
-        {
-            samples++;
-            if (((int16_t)r_border[row] - (int16_t)l_border[row]) >= EIGHTN_CROSS_OPEN_WIDTH)
-            {
-                open_cnt++;
-            }
-        }
-        if (samples >= 4u && ((uint16_t)open_cnt * 3u) < ((uint16_t)samples * 2u))
-        {
-            return;
-        }
-    }
-
+    cross_break_l = break_num_l;
+    cross_break_r = break_num_r;
     cross_flag = 1;
-    fill_from = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
 
-    start = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_BACK);
-    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
-    end = (uint8_t)(cross_break_l - EIGHTN_CROSS_SLOPE_NEAR);
+    start = (uint8_t)(break_num_l - EIGHTN_CROSS_SLOPE_BACK);
+    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H);
+    end = (uint8_t)(break_num_l - EIGHTN_CROSS_SLOPE_NEAR);
     calculate_s_i(start, end, l_border, &slope_rate, &intercept);
-    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
+    fill_from = fill_start_row(break_num_l);
+    ti->fill_from_l = fill_from;
+    for (i = fill_from; i < (uint8_t)(IMG_H - 1); i++)
     {
         int16_t v = (int16_t)(slope_rate * (float)i + intercept);
         l_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
+        mark_cross_fill_rows(i, i, ti);
     }
 
-    start = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_BACK);
-    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H - 1);
-    end = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
+    start = (uint8_t)(break_num_r - EIGHTN_CROSS_SLOPE_BACK);
+    start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H);
+    end = (uint8_t)(break_num_r - EIGHTN_CROSS_SLOPE_NEAR);
     calculate_s_i(start, end, r_border, &slope_rate, &intercept);
-    fill_from = (uint8_t)(cross_break_r - EIGHTN_CROSS_SLOPE_NEAR);
-    for (i = fill_from; i < (uint16_t)(IMG_H - 1); i++)
+    fill_from = fill_start_row(break_num_r);
+    ti->fill_from_r = fill_from;
+    for (i = fill_from; i < (uint8_t)(IMG_H - 1); i++)
     {
         int16_t v = (int16_t)(slope_rate * (float)i + intercept);
         r_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-        mark_cross_fill_rows((uint8_t)i, (uint8_t)i, ti);
+        mark_cross_fill_rows(i, i, ti);
     }
 
     ti->cross_valid = 1;
-    ti->inflect_row = TR_ROW(cross_break_l);
+    ti->inflect_row = TR_ROW(break_num_l);
 }
 
 static void export_track(track_info_t *ti, uint8_t hightest)
@@ -661,6 +671,8 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     ti->both_lost_rows = both_lost;
 }
 
+//前瞻代码使用，超念是对的
+
 static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out)
 {
     const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
@@ -669,7 +681,6 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out)
     uint8_t r;
     uint16_t far = steer_look_far;
 
-    /* 菜单越界兜底:Far 必须能往近端滑出 span 行的空间 */
     if (far > (uint16_t)STEER_LOOK_FAR_MAX)
     {
         far = (uint16_t)STEER_LOOK_FAR_MAX;
@@ -680,9 +691,6 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out)
     }
     r = (uint8_t)far;
 
-    /* 从 Far 往近端滑,收满 span 个"至少有一侧边线"的行就停。
-     * export_track 从 TR_ROW(EIGHTN_START_ROW) 起写入;r 为相对近端行号。
-     * 看不到远处就继续往近滑:前瞻只会变短,不会整窗落空去走 hold 归零。 */
     while (r > 0u && n < span)
     {
         uint8_t tr;
@@ -758,7 +766,6 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
     out->err_hold = g_hold_frames;
 }
 
-/* Camera 调试:二值底图 + 彩色边线/中线。八邻域 track 行从 1 起有效。 */
 static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color)
 {
     if (x0 == x1 && y0 == y1)
@@ -774,7 +781,7 @@ static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, u
 void image_debug_show(const track_info_t *ti)
 {
     uint8_t tr;
-    uint8_t tr0 = (uint8_t)TR_ROW(EIGHTN_START_ROW); /* =1 */
+    uint8_t tr0 = (uint8_t)TR_ROW(EIGHTN_START_ROW);
     uint8_t any = 0;
 
     ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
@@ -827,11 +834,10 @@ void image_debug_show(const track_info_t *ti)
     }
 }
 
-/* 丢线保护只看前瞻:look_rows==0 表示从 Far 往近滑也收不到任何边 */
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
 {
     uint8_t gone = (uint8_t)(ti->look_rows == 0u);
 
-    *severe = gone; /* 前瞻全无:按严重失效走短计数 */
+    *severe = gone;
     return gone;
 }

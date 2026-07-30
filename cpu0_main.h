@@ -1,4 +1,4 @@
-/* cpu0_main.h - App_Cpu0 / g_AppCpu0 */
+/* cpu0_main.h */
 
 #ifndef CPU0_MAIN_H
 #define CPU0_MAIN_H
