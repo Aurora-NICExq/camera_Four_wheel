@@ -35,19 +35,34 @@
  * 必须设成实际能跑到的顶速,设成 DUTY_HARD_CAP 会让远端表永远吃不满,
  * 车始终"看半近半远"、等偏差出现才起手,峰值打角偏大 */
 #define STEER_W_DUTY_REF (3800)
-#define STEER_W_SINGLE_EDGE_PCT (50)
-#define STEER_W_CROSS_FILL_PCT (70) /* 十字补线行降权:补出的边界是外推值,不如实测边线可信 */
+/* 曾有两个逐行折扣,均已删除(见 image.c weighted_error 内注释):
+ *   STEER_W_SINGLE_EDGE_PCT (50)  单边丢线行降权
+ *   STEER_W_CROSS_FILL_PCT  (70)  十字补线行降权
+ * 折扣救不了错 mid;不要再加回来。 */
 /* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
  * 有效权重塌陷(视野基本全是开口)时沿用进入盲区前的误差,
  * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
 #define ERR_HOLD_W_MIN (120)
 #define ERR_HOLD_MAX_FRAMES (20)
 
-/* 最长白列巡线:列扫描找自底向上连续白像素最长的列作为左右搜索基准 */
-#define TH18_COL_MARGIN          (20)  /* 列扫描左右留白,避开图像边缘 */
-#define TH18_CROSS_BOTH_LOST_MIN (10)  /* 十字检测:双边丢线行数下限 */
-#define IMG_FILTER_SUM_MAX (255 * 5)   /* 3x3 去噪:邻域白点足够多则填白 */
-#define IMG_FILTER_SUM_MIN (255 * 2)   /* 邻域白点过少则填黑 */
+/* 八邻域双边巡线(已从最长白列硬回退) */
+#define EIGHTN_START_ROW (IMG_H - 2)
+#define EIGHTN_BORDER_MIN (1)
+#define EIGHTN_BORDER_MAX (IMG_W - 2)
+#define EIGHTN_MAX_POINTS (IMG_H * 3)
+#define EIGHTN_FILTER_SUM_MAX (255 * 5)
+#define EIGHTN_FILTER_SUM_MIN (255 * 2)
+#define EIGHTN_MEET_DIST (2)
+#define EIGHTN_EDGE_LOST_MARGIN  (2)          /* 边界贴到图像黑框(±2px)视作丢线 */
+
+/* 十字补线:菜单 Cross Fill 开关控制 */
+#define EIGHTN_CROSS_SLOPE_BACK (15)
+#define EIGHTN_CROSS_SLOPE_NEAR  (5)
+#define EIGHTN_CROSS_CORNER_L    (4)
+#define EIGHTN_CROSS_CORNER_R    (IMG_W - 4)
+#define EIGHTN_CROSS_BREAK_DROW  (15)
+#define EIGHTN_CROSS_OPEN_WIDTH  (140)
+#define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8)
 
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
