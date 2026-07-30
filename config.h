@@ -35,13 +35,15 @@
  * span 写死 20——调"收多少行"会和 Far 互抵(R1),不开菜单。
  *
  * 看不到远处就继续往近滑,前瞻只会变短不会整窗落空(见 look_ahead_error)。 */
-#define STEER_LOOK_SPAN        (20)
+#define STEER_LOOK_SPAN (20)
 #define STEER_LOOK_FAR_DEFAULT (115)
-#define STEER_LOOK_FAR_MAX     (IMG_H - 1) /* tr = 1 + (r-1) 时 r 最大 Far-1 < IMG_H */
+#define STEER_LOOK_FAR_MAX                                                     \
+  (IMG_H - 1) /* tr = 1 + (r-1) 时 r 最大 Far-1 < IMG_H */
 #if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)
 #error "STEER_LOOK_SPAN out of range"
 #endif
-#if (STEER_LOOK_FAR_DEFAULT > STEER_LOOK_FAR_MAX) || (STEER_LOOK_FAR_DEFAULT <= STEER_LOOK_SPAN)
+#if (STEER_LOOK_FAR_DEFAULT > STEER_LOOK_FAR_MAX) ||                           \
+    (STEER_LOOK_FAR_DEFAULT <= STEER_LOOK_SPAN)
 #error "STEER_LOOK_FAR_DEFAULT out of range"
 #endif
 /* 曾有 8 段低/高速权重表 + W Ref 按 duty 交叉淡入,已删。
@@ -59,15 +61,15 @@
 #define EIGHTN_FILTER_SUM_MAX (255 * 5)
 #define EIGHTN_FILTER_SUM_MIN (255 * 2)
 #define EIGHTN_MEET_DIST (2)
-#define EIGHTN_EDGE_LOST_MARGIN  (2)          /* 边界贴到图像黑框(±2px)视作丢线 */
+#define EIGHTN_EDGE_LOST_MARGIN (2) /* 边界贴到图像黑框(±2px)视作丢线 */
 
 /* 十字补线:菜单 Cross Fill 开关控制 */
 #define EIGHTN_CROSS_SLOPE_BACK (15)
-#define EIGHTN_CROSS_SLOPE_NEAR  (5)
-#define EIGHTN_CROSS_CORNER_L    (4)
-#define EIGHTN_CROSS_CORNER_R    (IMG_W - 4)
-#define EIGHTN_CROSS_BREAK_DROW  (15)
-#define EIGHTN_CROSS_OPEN_WIDTH  (140)
+#define EIGHTN_CROSS_SLOPE_NEAR (5)
+#define EIGHTN_CROSS_CORNER_L (4)
+#define EIGHTN_CROSS_CORNER_R (IMG_W - 4)
+#define EIGHTN_CROSS_BREAK_DROW (15)
+#define EIGHTN_CROSS_OPEN_WIDTH (140)
 #define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8)
 
 #define SERVO_PWM_HZ (50)
@@ -81,15 +83,14 @@
 #define KD (1.49f)
 #define D_FILT_ALPHA (0.4f)
 
-#define STRAIGHT_DUTY (2100) /* 菜单 Duty 默认值:全程唯一的占空比(满量程 10000) */
+#define STRAIGHT_DUTY                                                          \
+  (2100) /* 菜单 Duty 默认值:全程唯一的占空比(满量程 10000) */
 #define DUTY_HARD_CAP (6000)
-
-
 
 /* 减速不限幅:目标降低时立即跟进,见 control.c。
  * 曾有 DUTY_SLEW_DOWN(10000),但 g_duty_now ≤ DUTY_HARD_CAP(6000),
  * 单帧降幅恒 < 10000,该限幅分支永远走不到——已删,不要再加回来 */
-#define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
+#define DUTY_SLEW_UP (120) /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
 /* 曾有 ROWS_CAP 行数限速表与 valid_rows 字段,已删:速度只由 Duty;
  * 丢线保护改看前瞻 look_rows==0,线回来后允许继续跑(不锁存)。 */
@@ -98,11 +99,13 @@
 
 #define MOTOR_PWM_FREQ (17000)
 
-#define KEY_SCAN_PERIOD_MS (5)  /* 按键扫描周期；与实测参考工程 JOYSTICK_SCAN_PERIOD_MS 一致 */
-#define KEY_DEBOUNCE_MS (20)    /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
+#define KEY_SCAN_PERIOD_MS                                                     \
+  (5) /* 按键扫描周期；与实测参考工程 JOYSTICK_SCAN_PERIOD_MS 一致 */
+#define KEY_DEBOUNCE_MS                                                        \
+  (20) /* 消抖窗口：连续 KEY_DEBOUNCE_COUNT 次采样一致才翻转稳定态 */
 #define KEY_DEBOUNCE_COUNT (KEY_DEBOUNCE_MS / KEY_SCAN_PERIOD_MS)
 #define KEY_LONG_PRESS_MS (1000) /* UP/DOWN 按住超过该时长后开始连发 */
-#define KEY_REPEAT_MS (80)       /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
+#define KEY_REPEAT_MS (80) /* 连发间隔（is_repeat=1，菜单按 10 倍步长调整） */
 
 #define MOTOR_TEST_DUTY (2000) /* 电机测试固定占空比 20% */
 
@@ -116,35 +119,38 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100(原含 WRef,已删除) */
-#define PRESET_LOW_KP           (2.29f)
-#define PRESET_LOW_KD         (1.49f)
-#define PRESET_LOW_D_ALPHA    (0.40f)
-#define PRESET_LOW_THRESHOLD  (0)
+// 这个他妈测一次就出来了，前瞻是对的
+#define PRESET_LOW_KP (1.50f)
+#define PRESET_LOW_KD (1.20f)
+#define PRESET_LOW_D_ALPHA (0.40f)
+#define PRESET_LOW_THRESHOLD (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_DUTY       (2100)
-#define PRESET_LOW_STOP_TIME  (105)
+#define PRESET_LOW_LOOK_FAR (71)
+#define PRESET_LOW_DUTY (2700)
+#define PRESET_LOW_STOP_TIME (30)
 
 /* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200(原含 WRef,已删除)。
  * 速度全程只由菜单 Duty 决定 */
-#define PRESET_MID_KP           (KP)
-#define PRESET_MID_KD         (4.73f)
-#define PRESET_MID_D_ALPHA    (0.40f)
-#define PRESET_MID_THRESHOLD  (0)
+#define PRESET_MID_KP (KP)
+#define PRESET_MID_KD (4.73f)
+#define PRESET_MID_D_ALPHA (0.40f)
+#define PRESET_MID_THRESHOLD (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_DUTY       (3200)
-#define PRESET_MID_STOP_TIME  (28)
+#define PRESET_MID_LOOK_FAR (STEER_LOOK_FAR_DEFAULT)
+#define PRESET_MID_DUTY (3200)
+#define PRESET_MID_STOP_TIME (28)
 
 /* 高速档:占位,尚未实测。每一项都等于代码默认值,
  * 因此"应用高速档" == "Restore Def",Duty 仍是低速的 2100。
  * 菜单里已改名为 "High (= Default)",避免赛道上误以为选了一档快的。
  * 实测出真正的高速参数前,不要把名字改回 "High" */
-#define PRESET_HIGH_KP           (KP)
-#define PRESET_HIGH_KD         (KD)
-#define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)
-#define PRESET_HIGH_THRESHOLD  (0)
+#define PRESET_HIGH_KP (KP)
+#define PRESET_HIGH_KD (KD)
+#define PRESET_HIGH_D_ALPHA (D_FILT_ALPHA)
+#define PRESET_HIGH_THRESHOLD (0)
 #define PRESET_HIGH_CROSS_FILL (1)
-#define PRESET_HIGH_DUTY       (STRAIGHT_DUTY)
-#define PRESET_HIGH_STOP_TIME  (DRIVE_ARMED_TIMEOUT_S)
+#define PRESET_HIGH_LOOK_FAR (STEER_LOOK_FAR_DEFAULT)
+#define PRESET_HIGH_DUTY (STRAIGHT_DUTY)
+#define PRESET_HIGH_STOP_TIME (DRIVE_ARMED_TIMEOUT_S)
 
 #endif /* CONFIG_H */
