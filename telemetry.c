@@ -128,8 +128,12 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
         /* hold: 0=err 为实测,>0=盲区保持中(值为已保持帧数),见 image.h err_hold
            tgt : slew 之前的目标占空比 = 菜单 Duty。dty<tgt 只可能是还在爬升,
                  因为行数限速(ROWS_CAP)已删,不存在其他把 duty 压下去的机制。
-                 保留这一列的意义是让日志自带"当时命令的是多少速度" */
-        queue_push_line("# t_ms,err,hold,srv,dty,tgt,row,lst,th,crs,kp,kd,wref\r\n");
+                 保留这一列的意义是让日志自带"当时命令的是多少速度"
+           nr/fr: 两段前瞻近段/远段实际投票的行数。fr=0 → 远段整段无信息,
+                 误差退化成纯近段、前瞻当帧失效。这是唯一的降级路径(R6)
+           farw: 当前 Far W%,与 kp/kd 一样是"让日志自带配置"的列 */
+        queue_push_line(
+            "# t_ms,err,hold,srv,dty,tgt,row,nr,fr,lst,th,crs,kp,kd,farw\r\n");
         s_need_header = 0u;
     }
 
@@ -139,7 +143,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     }
 
     len = snprintf(buf, sizeof(buf),
-                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%.2f,%u\r\n",
+                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%.2f,%u\r\n",
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
@@ -147,12 +151,14 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
                    (unsigned)out->duty,
                    (unsigned)out->duty_target,
                    (unsigned)ti->valid_rows,
+                   (unsigned)ti->near_rows,
+                   (unsigned)ti->far_rows,
                    (unsigned)ti->both_lost_rows,
                    (unsigned)ti->threshold,
                    (unsigned)ti->cross_valid,
                    (double)steer_kp,
                    (double)steer_kd,
-                   (unsigned)steer_w_duty_ref);
+                   (unsigned)steer_far_w_pct);
     if (len > 0)
     {
         uint16_t send_len = (len < (int)sizeof(buf))

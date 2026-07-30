@@ -42,8 +42,7 @@ int core0_main(void) {
       continue;
     }
 
-    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, control_duty_prev,
-                  &g_track);
+    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track);
 
     {
       uint8_t severe_image = 0;
@@ -80,10 +79,8 @@ int core0_main(void) {
 
     if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
-      control_duty_prev = 0;
     } else if (menu_align_test_mode()) {
       motor_apply_servo_only(out.servo_pwm);
-      control_duty_prev = 0;
     } else if (drive_en && drive_armed) {
       uint32_t now_us = hal_time_us();
       if (!armed_t0_set) {
@@ -102,19 +99,15 @@ int core0_main(void) {
               DRIVE_LAUNCH_DELAY_US + (uint32_t)drive_stop_time_s * 1000000u) {
         drive_timed_out = 1;
         motor_reset();
-        control_duty_prev = 0;
         control_duty_reset();
       } else if (armed_elapsed_us < DRIVE_LAUNCH_DELAY_US) {
         motor_reset();
-        control_duty_prev = 0;
         control_duty_reset();
       } else {
         motor_apply(out.servo_pwm, out.duty);
-        control_duty_prev = out.duty;
       }
     } else {
       motor_reset();
-      control_duty_prev = 0;
       if (!drive_en) {
         control_init();
       } else {

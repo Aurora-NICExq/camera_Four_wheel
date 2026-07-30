@@ -8,7 +8,7 @@
 
 volatile int16_t  image_threshold  = 0;
 volatile uint8_t  image_cross_fill = 1;   /* 菜单 Cross Fill */
-volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF; /* 菜单 W Ref */
+volatile uint16_t steer_far_w_pct  = STEER_FAR_W_PCT;  /* 菜单 Far W%:远段占比 */
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
@@ -639,48 +639,53 @@ static void export_track(track_info_t *ti)
     }
 }
 
-static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
+/* 两段前瞻误差。取代原 weighted_error():
+   8 段权重表 × 速度交叉淡入 × 逐行折扣 → 近/远两段均匀平均 + 一个混合比。
+   段内均匀:没有隐藏的权重曲线,"参与"与"不参与"是二值的。
+   不含 duty:同一个弯在任何速度下算出同一个误差,Kp 的含义不再漂移(R3)。 */
+static int16_t two_band_error(track_info_t *ti)
 {
-    static const uint8_t w_low[STEER_W_BANDS]  = STEER_WEIGHTS_LOWSPEED;
-    static const uint8_t w_high[STEER_W_BANDS] = STEER_WEIGHTS_HIGHSPEED;
+    int32_t near_acc = 0;
+    int32_t far_acc  = 0;
+    uint8_t near_n   = 0;
+    uint8_t far_n    = 0;
+    uint8_t hi;
+    uint8_t r;
+    int32_t err;
+    int32_t fw;
 
-    uint16_t ref = steer_w_duty_ref;
-    uint32_t k;
-    int32_t  acc = 0;
-    int32_t  w_sum = 0;
-    uint8_t  r;
+    /* 远段上界与视野同时钳住:看不到 STEER_FAR_ROW_HI 行就用看得到的部分 */
+    hi = (ti->valid_rows < (uint8_t)STEER_FAR_ROW_HI)
+       ? ti->valid_rows : (uint8_t)STEER_FAR_ROW_HI;
 
-    if (ref == 0u) ref = DUTY_HARD_CAP; /* 除零兜底 */
-    k = ((uint32_t)duty_now * 256u) / ref;
-    if (k > 256u) k = 256u;
-
-    for (r = 0; r < ti->valid_rows; r++)
+    for (r = 0; r < hi; r++)
     {
-        uint8_t band = (uint8_t)(r / STEER_W_BAND_ROWS);
-        int32_t w;
+        int32_t dev;
 
-        if (band >= STEER_W_BANDS) band = STEER_W_BANDS - 1;
-        w = (int32_t)w_low[band] * (int32_t)(256u - k)
-          + (int32_t)w_high[band] * (int32_t)k;
-
-        /* 丢线判定优先于补线判定:补线失败被夹到边界的行同时满足两者 */
         if (ti->left_lost[r] && ti->right_lost[r])
         {
-            continue; /* 双边丢线行没有中线信息,不投假居中票 */
+            continue; /* 双边丢线:无中线信息,不投假居中票 */
         }
-        if (ti->cross_filled[r])
+        dev = (int32_t)ti->mid[r] - IMG_CENTER;
+        if (r < (uint8_t)STEER_SPLIT_ROW)
         {
-            w = (w * STEER_W_CROSS_FILL_PCT) / 100;
+            near_acc += dev;
+            near_n++;
         }
-        /* 单边行原有 ×STEER_W_SINGLE_EDGE_PCT 折扣已删:
-           export_track 现在按半宽重建 mid,这个值不再是假值,无需打折 */
-        acc   += w * ((int16_t)ti->mid[r] - IMG_CENTER);
-        w_sum += w;
+        else
+        {
+            far_acc += dev;
+            far_n++;
+        }
     }
+    /* R6:参与行数必须可观测。far_rows 送遥测,远段塌陷不再是隐形的 */
+    ti->near_rows = near_n;
+    ti->far_rows  = far_n;
 
-    /* 盲区误差保持:有效权重塌陷时沿用进入盲区前的误差,超时按比例衰减回中 */
-    if (w_sum < ERR_HOLD_W_MIN)
+    if (near_n == 0u && far_n == 0u)
     {
+        /* 两段都没有一行投票 → 盲区保持。触发条件是定死的"投票行数为 0",
+           不再是随权重表变化的 w_sum 阈值 */
         if (g_hold_frames < ERR_HOLD_MAX_FRAMES)
         {
             g_hold_frames++;
@@ -691,8 +696,28 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         }
         return g_err_hold;
     }
+
+    fw = (int32_t)steer_far_w_pct;
+    if (fw > 100) fw = 100;
+
+    if (far_n == 0u)
+    {
+        /* 远段空(视野不到分段行,或远段整段是开口)→ 退化为纯近段。
+           这是唯一的前瞻降级路径,由 far_rows=0 在遥测里标出 */
+        err = near_acc / (int32_t)near_n;
+    }
+    else if (near_n == 0u)
+    {
+        err = far_acc / (int32_t)far_n;
+    }
+    else
+    {
+        err = ((near_acc / (int32_t)near_n) * (100 - fw)
+             + (far_acc  / (int32_t)far_n)  * fw) / 100;
+    }
+
     g_hold_frames = 0;
-    g_err_hold = (int16_t)(acc / w_sum);
+    g_err_hold = (int16_t)err;
     return g_err_hold;
 }
 
@@ -813,7 +838,10 @@ void image_debug_show(const track_info_t *ti)
     }
 }
 
-void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
+/* 注意:不收 duty 入参。旧版本靠 duty 在两张权重表之间淡入,那是隐式增益调度——
+   同一个弯在不同速度下算出不同误差,Kp 的实测值失去可比性(CLAUDE.md R3)。
+   现在感知与控制量彻底解耦,control_duty_prev 也随之删除 */
+void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
 {
     uint8_t th;
 
@@ -833,8 +861,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
     }
     export_track(out);
 
-    out->error = weighted_error(out, duty_now);
-    /* weighted_error 内部:实测帧把 g_hold_frames 清 0,盲区帧递增到上限。
+    out->error = two_band_error(out);
+    /* two_band_error 内部:实测帧把 g_hold_frames 清 0,盲区帧递增到上限。
        在这里导出,让"这一帧的误差是不是真的"进遥测 */
     out->err_hold = g_hold_frames;
 }

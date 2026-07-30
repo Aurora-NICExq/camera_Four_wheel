@@ -25,25 +25,43 @@
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
-#define STEER_W_BANDS (8)
-#define STEER_W_BAND_ROWS (15)
-#define STEER_WEIGHTS_LOWSPEED {8, 10, 9, 6, 4, 2, 1, 0}
-#define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
-/* 前瞻归一化基准:占空比达到该值时权重完全切到高速(远端)表。
- * 必须设成实际能跑到的顶速,设成 DUTY_HARD_CAP 会让远端表永远吃不满,
- * 车始终"看半近半远"、等偏差出现才起手,峰值打角偏大 */
-#define STEER_W_DUTY_REF (3800)
-#define STEER_W_CROSS_FILL_PCT (70) /* 十字补线行降权:补出的边界是外推值,不如实测边线可信 */
+/* ---------------- 两段前瞻 ----------------
+ * 近段 [0, STEER_SPLIT_ROW) 与远段 [STEER_SPLIT_ROW, STEER_FAR_ROW_HI)
+ * 各自均匀平均,再按菜单 Far W% 混合成一个误差标量。
+ * 段内均匀 = 没有隐藏的权重曲线;公式里不含 duty = 转向增益不随速度漂移。
+ *
+ * 分段点取值依据。被替换掉的 8 段表,在两组实测预设的混合系数(k≈137)下
+ * 塌缩成这条固定权重曲线(按峰值归一):
+ *     段:   0     1     2     3     4     5     6     7
+ *     行:  0-14 15-29 30-44 45-59 60-74 75-89 90-104 105-119
+ *     权:  0.63  0.89  0.97  1.00  0.95  0.68  0.41  0.14
+ * 峰在第 3 段(45-59 行)→ 取 45 作分段点。
+ * 90 行以上原权重只剩 0.41/0.14,又是透视压缩最重、最先丢线的区域
+ * → 取 90 作远段上界,105-119 整段弃用。
+ *
+ * Far W% 默认 65 的依据:近段行心≈22、远段行心≈67,
+ * 混合行心 = (22*(100-x) + 67*x)/100,x=65 时 ≈51.2,
+ * 与旧 8 段表满视野下的等效瞄准行(~51)对齐 → Kp/Kd 可基本沿用。
+ *
+ * 已删除的旧机制:STEER_W_BANDS / BAND_ROWS / WEIGHTS_LOWSPEED /
+ * WEIGHTS_HIGHSPEED / STEER_W_DUTY_REF(菜单 W Ref)/ CROSS_FILL_PCT。
+ * 速度交叉淡入从未真正生效:两组实测预设算出的 k 分别是 141 和 136,
+ * W Ref 一直被用来手动抵消速度依赖,"高速看远"这个特性一次没被用上。 */
+#define STEER_SPLIT_ROW  (45)
+#define STEER_FAR_ROW_HI (90)
+#define STEER_FAR_W_PCT  (65) /* 菜单 Far W% 默认值:远段占比,近段 = 100-该值 */
 
 /* 单边行 mid 重建用的半宽兜底值。仅在"整个搜索带里没有任何一条双边可见行"
  * 时才用得到——那种帧本身已经严重劣化,丢线保护大概率正在计数。
  * 正常帧的半宽由 export_track 从最近的双边可见行滚动取得,不用这个值。
  * 曾有 STEER_W_SINGLE_EDGE_PCT(50) 给假 mid 打折,已随上游修好而删除 */
 #define TRACK_HALF_W_FALLBACK (60)
-/* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
- * 有效权重塌陷(视野基本全是开口)时沿用进入盲区前的误差,
- * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
-#define ERR_HOLD_W_MIN (120)
+
+/* 盲区误差保持:双边丢线行没有中线信息,不投"假居中"票。
+ * 近段远段都没有任何一行投票时,沿用进入盲区前的误差,最多保持 N 帧,
+ * 超时每帧 ×3/4 衰减回中。err_hold 送遥测,陈旧误差不再伪装成实测值。
+ * 曾以 ERR_HOLD_W_MIN(120) 作触发阈值,但那是"混合权重之和"的单位——
+ * 改动权重表就会悄悄改变它的含义(R1),已换成"投票行数为 0"这个定死的条件 */
 #define ERR_HOLD_MAX_FRAMES (20)
 
 /* 最长白列巡线:列扫描找自底向上连续白像素最长的列作为左右搜索基准 */
@@ -76,8 +94,9 @@
 /* 曾有 ROWS_CAP 行数限速表({20,35,55} → {1500,2200,3400}),已整表删除。
  * 删除理由:低速档 Duty=2100 时 3400/2200 两档恒大于 Duty、永不生效,
  * 唯一活跃行为是"ROW<20 压到 1500";而 ROW<8 已由下面的丢线保护接管,
- * 独占区间只剩 ROW∈[8,19]。且它压低 duty 会经 control_duty_prev
- * 反馈进 image_process 改变权重表混合系数 k,构成隐式增益调度。
+ * 独占区间只剩 ROW∈[8,19]。另一条理由(当时成立,现已不适用):它压低 duty
+ * 会经 control_duty_prev 反馈进 image_process 改变权重表混合系数 k,
+ * 构成隐式增益调度——该耦合已随两段前瞻改造整体消失,control_duty_prev 也已删除。
  * 现在图像劣化时的唯一保护 = 丢线保护(连续 10 帧 / severe 2 帧后停车),
  * 速度全程只由菜单 Duty 决定。 */
 
@@ -109,18 +128,22 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100 WRef=3800 */
+/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100。
+ * 原记录含 WRef=3800,该参数已随速度交叉淡入一并删除;
+ * Far W% 沿用默认 65(混合行心与旧 WRef=3800 下的等效瞄准行对齐) */
 #define PRESET_LOW_KP           (2.29f)
 #define PRESET_LOW_KD         (1.49f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
 #define PRESET_LOW_THRESHOLD  (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_W_REF      (3800)
+#define PRESET_LOW_FAR_W      (STEER_FAR_W_PCT)
 #define PRESET_LOW_DUTY       (2100)
 #define PRESET_LOW_STOP_TIME  (105)
 
-/* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200 WRef=6000。
- * 与低速档的差别只有基准速度和 W Ref(以及被迫抬高的 Kd)。
+/* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200。
+ * 与低速档的差别只有基准速度(原记录还有 WRef=6000,该参数已删)。
+ * Kd 被迫抬到 4.73 的原因见 CLAUDE.md 证据 2:旧权重表把瞄准点向近端拖,
+ * 只能靠 Kd 微分回来。两段前瞻上车后 Kd 大概率能压回 1.5 附近,重新实测。
  * 注:Curve Duty / Str Duty 已于 c24f320 删除,ROWS_CAP 行数限速表随后也已删除,
  * 速度全程只由菜单 Duty 决定,不存在任何自动降速 */
 #define PRESET_MID_KP           (KP)
@@ -128,7 +151,7 @@
 #define PRESET_MID_D_ALPHA    (0.40f)
 #define PRESET_MID_THRESHOLD  (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_W_REF      (6000)
+#define PRESET_MID_FAR_W      (STEER_FAR_W_PCT)
 #define PRESET_MID_DUTY       (3200)
 #define PRESET_MID_STOP_TIME  (28)
 
@@ -141,7 +164,7 @@
 #define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)
 #define PRESET_HIGH_THRESHOLD  (0)
 #define PRESET_HIGH_CROSS_FILL (1)
-#define PRESET_HIGH_W_REF      (STEER_W_DUTY_REF)
+#define PRESET_HIGH_FAR_W      (STEER_FAR_W_PCT)
 #define PRESET_HIGH_DUTY       (STRAIGHT_DUTY)
 #define PRESET_HIGH_STOP_TIME  (DRIVE_ARMED_TIMEOUT_S)
 
