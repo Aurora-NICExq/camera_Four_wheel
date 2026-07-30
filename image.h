@@ -14,10 +14,9 @@ typedef struct
     uint8_t  left_lost [IMG_H];
     uint8_t  right_lost[IMG_H];
 
-    uint8_t  valid_rows;
     int16_t  error;
     uint8_t  err_hold;
-    uint8_t  look_rows; /* 本帧前瞻窗内实际参与行数;0 = 前瞻塌陷走 hold */
+    uint8_t  look_rows; /* 本帧前瞻窗内实际参与行数;0 = 前瞻塌陷,走 hold + 丢线保护 */
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
@@ -30,6 +29,7 @@ typedef struct
 
 extern volatile int16_t image_threshold;
 extern volatile uint8_t image_cross_fill;
+extern volatile uint16_t steer_look_far; /* 菜单 Look Far:前瞻从哪一行往近收 */
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out);
 

@@ -31,6 +31,7 @@ int core0_main(void) {
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
+  uint8_t failsafe_latched = 0; /* 前瞻丢线触发后锁存,须 Armed OFF 才解除 */
   uint32_t telem_frame = 0;
   control_out_t out = {0};
   uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
@@ -77,7 +78,10 @@ int core0_main(void) {
         }
       } else {
         fail_cnt = 0;
-        drive_en = 1;
+        /* 锁存后即使线回来也不自动 drive_en=1 */
+        if (!failsafe_latched) {
+          drive_en = 1;
+        }
       }
       if (severe_image) {
         if (severe_fail_cnt < FAILSAFE_SEVERE_FRAMES) {
@@ -88,7 +92,11 @@ int core0_main(void) {
       }
       if (fail_cnt >= FAILSAFE_FRAMES ||
           severe_fail_cnt >= FAILSAFE_SEVERE_FRAMES) {
+        if (drive_en) {
+          control_init(); /* 仅在切入锁存时清一次 PD,避免每帧清零 */
+        }
         drive_en = 0;
+        failsafe_latched = 1;
       }
     }
 
@@ -134,16 +142,19 @@ int core0_main(void) {
       }
     } else {
       motor_reset();
-      if (!drive_en) {
-        control_init();
-      } else {
+      if (drive_en) {
         control_duty_reset();
       }
+      /* failsafe 锁存中:电机已停,PD 在切入时清过,不再每帧 control_init */
     }
 
     if (!drive_armed) {
       armed_t0_set = 0;
       drive_timed_out = 0;
+      failsafe_latched = 0;
+      fail_cnt = 0;
+      severe_fail_cnt = 0;
+      drive_en = 1;
     }
 
     if (menu_camera_view()) {
@@ -152,8 +163,8 @@ int core0_main(void) {
       ips200_show_int(32, IMG_H + 4, out.error_used, 4);
       ips200_show_string(104, IMG_H + 4, "SRV");
       ips200_show_uint(136, IMG_H + 4, out.servo_pwm, 4);
-      ips200_show_string(0, IMG_H + 20, "ROW");
-      ips200_show_uint(32, IMG_H + 20, g_track.valid_rows, 3);
+      ips200_show_string(0, IMG_H + 20, "LOOK");
+      ips200_show_uint(32, IMG_H + 20, g_track.look_rows, 3);
       ips200_show_string(104, IMG_H + 20, "DTY");
       ips200_show_uint(136, IMG_H + 20, out.duty, 4);
       ips200_show_string(0, IMG_H + 36, "LST");
@@ -164,8 +175,8 @@ int core0_main(void) {
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
       ips200_show_string(0, IMG_H + 68, "HLD");
       ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
-      ips200_show_string(104, IMG_H + 68, "CAP");
-      ips200_show_uint(136, IMG_H + 68, out.rows_cap, 4);
+      ips200_show_string(104, IMG_H + 68, "FAR");
+      ips200_show_uint(136, IMG_H + 68, steer_look_far, 3);
     } else if (menu_uart_test_mode() && ut_tick) {
       menu_port_draw_uint(8, 2, telemetry_wireless_ok(), 7, MENU_STYLE_NORMAL);
       menu_port_draw_uint(8, 3, telemetry_tx_bytes(), 7, MENU_STYLE_NORMAL);

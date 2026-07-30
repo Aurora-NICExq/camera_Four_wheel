@@ -194,7 +194,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     if (s_need_header)
     {
         if (queue_push_line(
-                "# t_ms,err,hold,look,srv,dty,tgt,cap,row,lst,th,crs,"
+                "# t_ms,err,hold,look,far,srv,dty,tgt,lst,th,crs,"
                 "kp100,kd100\r\n"))
         {
             s_need_header = 0u;
@@ -207,16 +207,15 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     }
 
     len = snprintf(buf, sizeof(buf),
-                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
+                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u\r\n",
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
                    (unsigned)ti->look_rows,
+                   (unsigned)steer_look_far,
                    (unsigned)out->servo_pwm,
                    (unsigned)out->duty,
                    (unsigned)out->duty_target,
-                   (unsigned)out->rows_cap,
-                   (unsigned)ti->valid_rows,
                    (unsigned)ti->both_lost_rows,
                    (unsigned)ti->threshold,
                    (unsigned)ti->cross_valid,

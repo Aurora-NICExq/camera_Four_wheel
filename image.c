@@ -6,6 +6,7 @@
 
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
+volatile uint16_t steer_look_far = STEER_LOOK_FAR_DEFAULT;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
@@ -638,7 +639,6 @@ static void export_track(track_info_t *ti, uint8_t hightest)
 
     if (lo > hi)
     {
-        ti->valid_rows = 0;
         ti->both_lost_rows = 0;
         return;
     }
@@ -658,42 +658,31 @@ static void export_track(track_info_t *ti, uint8_t hightest)
         }
     }
 
-    ti->valid_rows = (uint8_t)(hi - lo + 1u);
-
-    /* 裁掉远端连续双丢行:搜索未到达或沿图像黑框爬行的行只有假居中数据,
-       留在 valid_rows 里会稀释前瞻误差,并让 curve_temp 在入弯口失明 */
-    while (ti->valid_rows > 0u)
-    {
-        uint8_t far_tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + ti->valid_rows - 1u);
-        if (!(ti->left_lost[far_tr] && ti->right_lost[far_tr]))
-        {
-            break;
-        }
-        ti->valid_rows--;
-        both_lost--;
-    }
     ti->both_lost_rows = both_lost;
 }
 
 static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out)
 {
-    const uint8_t span = (uint8_t)(STEER_LOOK_HI - STEER_LOOK_LO);
+    const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
     int32_t acc = 0;
     uint8_t n = 0;
-    uint8_t r = STEER_LOOK_HI;
+    uint8_t r;
+    uint16_t far = steer_look_far;
 
-    /* 从窗口最远端往近端滑,收满 span 个"至少有一侧边线"的行就停。
+    /* 菜单越界兜底:Far 必须能往近端滑出 span 行的空间 */
+    if (far > (uint16_t)STEER_LOOK_FAR_MAX)
+    {
+        far = (uint16_t)STEER_LOOK_FAR_MAX;
+    }
+    if (far <= (uint16_t)span)
+    {
+        far = (uint16_t)span + 1u;
+    }
+    r = (uint8_t)far;
+
+    /* 从 Far 往近端滑,收满 span 个"至少有一侧边线"的行就停。
      * export_track 从 TR_ROW(EIGHTN_START_ROW) 起写入;r 为相对近端行号。
-     *
-     * 这里不再用 valid_rows 钳窗口上界。原因有两条:
-     * 1) 那个钳位是多余的——export_track 把全部行先初始化成双边丢线,
-     *    八邻域没爬到的行下面那句 continue 已经排除,钳位不改变任何结果。
-     * 2) 固定窗口 + 钳位的组合有一个硬悬崖:valid_rows <= STEER_LOOK_LO 时
-     *    窗口整个落在视野之外 -> n=0 -> 走 hold -> 误差每帧 x3/4 衰减归零
-     *    -> 舵机回中。急弯中段正是这个工况,车会直着冲到赛道边缘,
-     *    等视野恢复后真误差突然回来,表现为"先回中、快出赛道才猛打满"。
-     * 改成往近端滑动后:看得远就用远的,看不远就用看得到的最远一段,
-     * 前瞻只会变短,不会消失。不新增任何可调参数(span 由 LO/HI 算出)。 */
+     * 看不到远处就继续往近滑:前瞻只会变短,不会整窗落空去走 hold 归零。 */
     while (r > 0u && n < span)
     {
         uint8_t tr;
@@ -786,15 +775,11 @@ void image_debug_show(const track_info_t *ti)
 {
     uint8_t tr;
     uint8_t tr0 = (uint8_t)TR_ROW(EIGHTN_START_ROW); /* =1 */
+    uint8_t any = 0;
 
     ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
 
-    if (ti->valid_rows == 0u)
-    {
-        return;
-    }
-
-    for (tr = (uint8_t)(tr0 + 1u); tr < (uint8_t)(tr0 + ti->valid_rows) && tr < IMG_H; tr++)
+    for (tr = (uint8_t)(tr0 + 1u); tr < IMG_H; tr++)
     {
         uint8_t  prev = (uint8_t)(tr - 1u);
         uint16_t y0 = (uint16_t)(IMG_H - 1u - prev);
@@ -806,20 +791,23 @@ void image_debug_show(const track_info_t *ti)
         {
             debug_draw_seg(ti->left[prev], y0, ti->left[tr], y1,
                            (filled0 || filled1) ? RGB565_YELLOW : RGB565_BLUE);
+            any = 1;
         }
         if (!ti->right_lost[prev] && !ti->right_lost[tr])
         {
             debug_draw_seg(ti->right[prev], y0, ti->right[tr], y1,
                            (filled0 || filled1) ? RGB565_YELLOW : RGB565_RED);
+            any = 1;
         }
         if (!ti->left_lost[prev] && !ti->right_lost[prev] &&
             !ti->left_lost[tr] && !ti->right_lost[tr])
         {
             debug_draw_seg(ti->mid[prev], y0, ti->mid[tr], y1, RGB565_GREEN);
+            any = 1;
         }
     }
 
-    if (ti->valid_rows == 1u)
+    if (!any && (!ti->left_lost[tr0] || !ti->right_lost[tr0]))
     {
         uint16_t y = (uint16_t)(IMG_H - 1u - tr0);
         if (!ti->left_lost[tr0])
@@ -839,36 +827,11 @@ void image_debug_show(const track_info_t *ti)
     }
 }
 
-
+/* 丢线保护只看前瞻:look_rows==0 表示从 Far 往近滑也收不到任何边 */
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
 {
-    uint8_t rows = ti->valid_rows;
-    uint8_t lost = ti->both_lost_rows;
+    uint8_t gone = (uint8_t)(ti->look_rows == 0u);
 
-    *severe = 0;
-    /* 远端连续双丢行是八邻域搜索未到达的区域（左右搜索未相遇时
-       hightest_row 保持 0，未搜索行保持初始化的极值边界），不代表
-       车已冲出赛道，不计入失效统计 */
-    while (rows > 0u &&
-           ti->left_lost[(uint8_t)(TR_ROW(EIGHTN_START_ROW) + rows - 1u)] &&
-           ti->right_lost[(uint8_t)(TR_ROW(EIGHTN_START_ROW) + rows - 1u)])
-    {
-        rows--;
-        lost--;
-    }
-    if (rows < FAILSAFE_MIN_ROWS)
-    {
-        *severe = (uint8_t)(rows == 0u);
-        return 1;
-    }
-    {
-        uint16_t lost_pct_lhs = (uint16_t)lost * 100u;
-        uint16_t rows_rhs = (uint16_t)rows;
-        if (lost_pct_lhs >= rows_rhs * FAILSAFE_SEVERE_BOTH_LOST_PCT)
-        {
-            *severe = 1;
-            return 1;
-        }
-        return (uint8_t)(lost_pct_lhs >= rows_rhs * FAILSAFE_MAX_BOTH_LOST_PCT);
-    }
+    *severe = gone; /* 前瞻全无:按严重失效走短计数 */
+    return gone;
 }

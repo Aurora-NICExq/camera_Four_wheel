@@ -27,29 +27,25 @@
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
-/* 单段前瞻:从 STEER_LOOK_HI 这一行(最远)往近端滑,取头 (HI-LO) 个
- * "至少有一侧边线"的行做均匀平均。全部权重在这一段上,
- * 无近端混合、无速度交叉淡入、无 W Ref。
+/* 单段前瞻:从 Look Far(菜单)这一行往近端滑,取 STEER_LOOK_SPAN 个
+ * "至少有一侧边线"的行做均匀平均。全部权重在这一段上。
  *
- * 再往远给:85~115(旧 75~105,更早 60~90)。
- * HI 决定"从多远开始看",HI-LO 决定"取多少行"(当前 30 行)。
+ * Look Far 调大 = 从更远起搜(更快、更提前打角);调小 = 窗口整体移近。
+ * 预期:低速/急弯赛道 85~100,高速直道为主 105~115;默认 115。
+ * span 写死 20——调"收多少行"会和 Far 互抵(R1),不开菜单。
  *
- * 窗口不再被 valid_rows 钳住(见 image.c look_ahead_error 内注释):
- * 旧的"固定窗口 + valid_rows 钳位"在 valid_rows <= LO 时窗口整个落空,
- * 走 hold 衰减归零 -> 急弯中段舵机回中。现在改为往近端滑动,
- * 看不到远处就用看得到的最远一段,前瞻只会变短不会消失。 */
-#define STEER_LOOK_LO (85)
-#define STEER_LOOK_HI (115)
-/* 越界护栏:tr = TR_ROW(EIGHTN_START_ROW) + r = 1 + r,r 最大 HI-1,
- * 故 HI 必须 <= IMG_H - 1,否则 mid[]/left_lost[] 会越界读 */
-#if (STEER_LOOK_HI > IMG_H - 1)
-#error "STEER_LOOK_HI too large: tr index would exceed IMG_H-1"
+ * 看不到远处就继续往近滑,前瞻只会变短不会整窗落空(见 look_ahead_error)。 */
+#define STEER_LOOK_SPAN        (20)
+#define STEER_LOOK_FAR_DEFAULT (115)
+#define STEER_LOOK_FAR_MAX     (IMG_H - 1) /* tr = 1 + (r-1) 时 r 最大 Far-1 < IMG_H */
+#if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)
+#error "STEER_LOOK_SPAN out of range"
 #endif
-#if (STEER_LOOK_LO >= STEER_LOOK_HI)
-#error "STEER_LOOK_LO must be < STEER_LOOK_HI (span = HI - LO)"
+#if (STEER_LOOK_FAR_DEFAULT > STEER_LOOK_FAR_MAX) || (STEER_LOOK_FAR_DEFAULT <= STEER_LOOK_SPAN)
+#error "STEER_LOOK_FAR_DEFAULT out of range"
 #endif
-/* 曾有 8 段低/高速权重表 + W Ref 按 duty 交叉淡入,已删:
- * Duty≈WRef 时才吃满远表,常用预设 k≈137 实际半近半远——旋钮在互抵(R1)。
+/* 曾有 8 段低/高速权重表 + W Ref 按 duty 交叉淡入,已删。
+ * 曾有 STEER_LOOK_LO/HI 成对宏:LO 在滑窗语义下只是 span,易误调,已拆开。
  * 曾有单边/补线逐行折扣,已删。 */
 /* 盲区误差保持:前瞻窗内无有效行时沿用进入盲区前的误差,
  * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
@@ -95,16 +91,8 @@
  * 单帧降幅恒 < 10000,该限幅分支永远走不到——已删,不要再加回来 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
-/* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Curve Duty
- * 抢速度话语权——速度由菜单 Duty 唯一决定。
- * ROW 掉到 20 以下(视野几乎丢失)才真正压到 Duty 之下 */
-#define ROWS_CAP_TABLE_LEN (3)
-#define ROWS_CAP_BINS {20, 35, 55}
-#define ROWS_CAP_DUTY {1500, 2200, 3400}
-
-#define FAILSAFE_MIN_ROWS (8)
-#define FAILSAFE_MAX_BOTH_LOST_PCT (70)
-#define FAILSAFE_SEVERE_BOTH_LOST_PCT (90)
+/* 曾有 ROWS_CAP 行数限速表与 valid_rows 字段,已删:速度只由 Duty;
+ * 丢线保护改看前瞻 look_rows==0;触发后锁存停机,Armed OFF 才复位。 */
 #define FAILSAFE_FRAMES (10)
 #define FAILSAFE_SEVERE_FRAMES (2)
 
@@ -138,8 +126,7 @@
 #define PRESET_LOW_STOP_TIME  (105)
 
 /* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200(原含 WRef,已删除)。
- * 注:Curve Duty / Str Duty 已于 c24f320 删除,速度全程只由菜单 Duty 决定,
- * 急弯降速只剩 rows_duty_cap 这一条图像质量安全网 */
+ * 速度全程只由菜单 Duty 决定 */
 #define PRESET_MID_KP           (KP)
 #define PRESET_MID_KD         (4.73f)
 #define PRESET_MID_D_ALPHA    (0.40f)
