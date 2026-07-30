@@ -675,33 +675,6 @@ static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, u
     }
 }
 
-static uint8_t g_calib_last_th = 0;
-
-static uint8_t image_resolve_threshold(const uint8_t img[IMG_H][IMG_W])
-{
-    if (image_threshold > 0)
-    {
-        return (uint8_t)image_threshold;
-    }
-    return otsu_threshold(img);
-}
-
-uint8_t image_calib_last_th(void)
-{
-    return g_calib_last_th;
-}
-
-/* 校准视图:raw 二值化,不做 3x3 滤波,黑区不被填白。复用 image_bin。 */
-uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W])
-{
-    uint8_t th = image_resolve_threshold(img);
-
-    g_calib_last_th = th;
-    binarize(img, th);
-    ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
-    return th;
-}
-
 void image_debug_show(const track_info_t *ti)
 {
     uint8_t tr;

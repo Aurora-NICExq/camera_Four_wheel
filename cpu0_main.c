@@ -153,19 +153,7 @@ int core0_main(void) {
       drive_timed_out = 0;
     }
 
-    if (menu_calib_view()) {
-      uint8_t th = image_calib_show((const uint8_t (*)[IMG_W])mt9v03x_image);
-      ips200_show_string(0, IMG_H + 4, "TH");
-      if (image_threshold > 0) {
-        ips200_show_int(32, IMG_H + 4, image_threshold, 3);
-      } else {
-        ips200_show_string(32, IMG_H + 4, "A");
-        ips200_show_int(48, IMG_H + 4, th, 3);
-      }
-      ips200_show_string(0, IMG_H + 20, "NO 3X3 FLT");
-      ips200_show_string(0, IMG_H + 36, "UP/DN:TH");
-      ips200_show_string(0, IMG_H + 52, "BACK:exit");
-    } else if (menu_camera_view()) {
+    if (menu_camera_view()) {
       image_debug_show(&g_track);
       ips200_show_string(0, IMG_H + 4, "ERR");
       ips200_show_int(32, IMG_H + 4, out.error_used, 4);

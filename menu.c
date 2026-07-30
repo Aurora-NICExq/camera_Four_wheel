@@ -62,7 +62,6 @@ static const preset_t s_presets[PRESET_COUNT] = {
 
 static nav_state_e       s_nav;
 static uint8_t           s_camera_view;
-static uint8_t           s_calib_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
 static uint8_t           s_uart_test_mode;
@@ -317,25 +316,13 @@ void menu_action_camera(void)
     s_align_test_mode = 0;
     s_motor_test_mode = 0;
     s_uart_test_mode  = 0;
-    s_calib_view = 0;
     s_camera_view = 1;
-}
-
-void menu_action_cam_calib(void)
-{
-    s_align_test_mode = 0;
-    s_motor_test_mode = 0;
-    s_uart_test_mode  = 0;
-    s_camera_view = 0;
-    s_calib_view = 1;
-    motor_stop();
 }
 
 void menu_action_align_test(void)
 {
     s_motor_test_mode = 0;
     s_uart_test_mode  = 0;
-    s_calib_view = 0;
     s_align_test_mode = 1;
     s_camera_view = 1;
     motor_stop();
@@ -359,7 +346,6 @@ void menu_action_uart_test(void)
     s_align_test_mode = 0;
     s_motor_test_mode = 0;
     s_camera_view     = 0;
-    s_calib_view      = 0;
     s_uart_test_mode  = 1;
     telemetry_reinit();
     motor_stop();
@@ -385,11 +371,6 @@ void menu_action_reset(void)
 uint8_t menu_camera_view(void)
 {
     return s_camera_view;
-}
-
-uint8_t menu_calib_view(void)
-{
-    return s_calib_view;
 }
 
 uint8_t menu_align_test_mode(void)
@@ -438,33 +419,6 @@ static void menu_handle_key(const menu_key_event_t *ev)
         {
             s_uart_test_mode = 0;
             draw_list_full();
-        }
-        return;
-    }
-
-    if (s_calib_view)
-    {
-        int16_t step = ev->is_repeat ? 10 : 2;
-        if (ev->key == MENU_KEY_BACK)
-        {
-            s_calib_view = 0;
-            draw_list_full();
-        }
-        else if (ev->key == MENU_KEY_UP || ev->key == MENU_KEY_DOWN)
-        {
-            int16_t th = image_threshold;
-            if (th <= 0)
-            {
-                th = (int16_t)image_calib_last_th();
-                if (th <= 0)
-                {
-                    th = FIXED_THRESHOLD;
-                }
-            }
-            th += (ev->key == MENU_KEY_UP) ? step : -step;
-            if (th < 1) th = 1;
-            if (th > 255) th = 255;
-            image_threshold = th;
         }
         return;
     }

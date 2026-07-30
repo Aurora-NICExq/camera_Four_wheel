@@ -28,7 +28,6 @@ const menu_item_t menu_items[] = {
     MENU_ACTION("Race Preset",  menu_action_race_preset),
     MENU_ACTION("Reset",        menu_action_reset),
     MENU_ACTION("Camera",       menu_action_camera),
-    MENU_ACTION("Cam Calib",    menu_action_cam_calib),
     MENU_ACTION("Align Test",   menu_action_align_test),
     MENU_ACTION("Motor Test",   menu_action_motor_test),
     MENU_ACTION("UART Test",    menu_action_uart_test),
