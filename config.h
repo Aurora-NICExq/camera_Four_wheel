@@ -18,6 +18,8 @@
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
+//前瞻相关参数
+
 #define STEER_LOOK_SPAN (20)
 #define STEER_LOOK_FAR_DEFAULT (115)
 #define STEER_LOOK_FAR_MAX                                                     \
@@ -48,6 +50,8 @@
 #define EIGHTN_CROSS_FILL_TO_LOOK_DEFAULT (0)
 /* Fill To Look=1 时补线顶端 ir = max(hightest, IMG_H-1-Look_Far)，与前瞻最远行对齐 */
 
+//舵机参数
+
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
 #define SERVO_MIN (629)
@@ -62,8 +66,7 @@
 #define DUTY_HARD_CAP (6000)
 #define DUTY_SLEW_UP (120)
 
-#define FAILSAFE_FRAMES (10)
-#define FAILSAFE_SEVERE_FRAMES (2)
+#define FAILSAFE_FRAMES (2)
 
 #define MOTOR_PWM_FREQ (17000)
 
@@ -75,9 +78,7 @@
 
 #define MOTOR_TEST_DUTY (2000)
 
-#define TELEM_DIV (5u)
-#define TELEM_UART_BAUD (115200u)
-#define UART_TEST_PERIOD_US (200000u)
+//保存的三版参数
 
 // 这个他妈测一次就出来了，前瞻是对的
 #define PRESET_LOW_KP (1.50f)
@@ -89,14 +90,14 @@
 #define PRESET_LOW_DUTY (2700)
 #define PRESET_LOW_STOP_TIME (30)
 
-#define PRESET_MID_KP (KP)
-#define PRESET_MID_KD (4.73f)
+#define PRESET_MID_KP (1.55f)
+#define PRESET_MID_KD (1.15f)
 #define PRESET_MID_D_ALPHA (0.40f)
 #define PRESET_MID_THRESHOLD (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_LOOK_FAR (STEER_LOOK_FAR_DEFAULT)
-#define PRESET_MID_DUTY (3200)
-#define PRESET_MID_STOP_TIME (28)
+#define PRESET_MID_LOOK_FAR (79)
+#define PRESET_MID_DUTY (3000)
+#define PRESET_MID_STOP_TIME (30)
 
 #define PRESET_HIGH_KP (KP)
 #define PRESET_HIGH_KD (KD)

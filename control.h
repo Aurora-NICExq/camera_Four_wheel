@@ -11,7 +11,6 @@ typedef struct
     uint16_t servo_pwm;
     uint16_t duty;
     int16_t  error_used;
-    uint16_t duty_target;
 } control_out_t;
 
 extern volatile float    steer_kp;
@@ -23,7 +22,6 @@ extern volatile uint16_t drive_stop_time_s;
 extern volatile uint16_t drive_duty_base;
 
 void control_init(void);
-void control_reset(void);
 void control_duty_reset(void);
 void control_update(const track_info_t *ti, control_out_t *out);
 uint16_t control_servo_clamp(int32_t servo_raw);

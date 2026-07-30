@@ -5,7 +5,6 @@
 #include "menu.h"
 #include "motor.h"
 #include "menu_port.h"
-#include "telemetry.h"
 #include "zf_common_headfile.h"
 
 #pragma section all "cpu0_dsram"
@@ -19,49 +18,20 @@ int core0_main(void) {
   motor_hw_init();
   menu_port_init();
   control_init();
-  telemetry_init();
   menu_init();
 
   mt9v03x_init();
   cpu_wait_event_ready();
 
   uint16_t fail_cnt = 0;
-  uint8_t severe_fail_cnt = 0;
   uint32_t armed_elapsed_us = 0;
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
-  uint32_t telem_frame = 0;
   control_out_t out = {0};
-  uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
-  uint8_t ut_active_prev = 0, ut_tick = 0;
 
   while (TRUE) {
     menu_task();
-
-    ut_tick = 0;
-    if (menu_uart_test_mode()) {
-      uint32_t now_us = hal_time_us();
-      if (!ut_active_prev) {
-        ut_active_prev = 1;
-        ut_seq = 0;
-        ut_drop = 0;
-        ut_last_us = now_us;
-        ut_tick = 1;
-        if (!telemetry_test_banner()) {
-          ut_drop++;
-        }
-      } else if ((uint32_t)(now_us - ut_last_us) >= UART_TEST_PERIOD_US) {
-        ut_last_us = now_us;
-        ut_seq++;
-        ut_tick = 1;
-        if (!telemetry_test_send(ut_seq, now_us / 1000u)) {
-          ut_drop++;
-        }
-      }
-    } else {
-      ut_active_prev = 0;
-    }
 
     if (!mt9v03x_finish_flag) {
       continue;
@@ -70,8 +40,7 @@ int core0_main(void) {
     image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track);
 
     {
-      uint8_t severe_image = 0;
-      if (image_track_invalid(&g_track, &severe_image)) {
+      if (g_track.look_rows == 0u) {
         if (fail_cnt < FAILSAFE_FRAMES) {
           fail_cnt++;
         }
@@ -79,31 +48,14 @@ int core0_main(void) {
         fail_cnt = 0;
         drive_en = 1;
       }
-      if (severe_image) {
-        if (severe_fail_cnt < FAILSAFE_SEVERE_FRAMES) {
-          severe_fail_cnt++;
-        }
-      } else {
-        severe_fail_cnt = 0;
-      }
-      if (fail_cnt >= FAILSAFE_FRAMES ||
-          severe_fail_cnt >= FAILSAFE_SEVERE_FRAMES) {
+      if (fail_cnt >= FAILSAFE_FRAMES) {
         drive_en = 0;
       }
     }
 
     control_update(&g_track, &out);
 
-    telem_frame++;
-    if (drive_armed && !menu_uart_test_mode()) {
-      uint32_t telem_t_ms = armed_elapsed_us / 1000u;
-      telemetry_update(telem_t_ms, telem_frame, &g_track, &out);
-    }
-    telemetry_pump();
-
-    if (menu_uart_test_mode()) {
-      motor_reset();
-    } else if (menu_motor_test_mode()) {
+    if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
     } else if (menu_left_test_mode()) {
       motor_apply_left_only(MOTOR_TEST_DUTY);
@@ -172,14 +124,6 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 84, image_fill_to_look, 1);
       ips200_show_string(104, IMG_H + 84, "FIL");
       ips200_show_uint(136, IMG_H + 84, g_track.fill_from_l, 3);
-    } else if (menu_uart_test_mode() && ut_tick) {
-      menu_port_draw_uint(8, 2, telemetry_wireless_ok(), 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 3, telemetry_tx_bytes(), 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 4, ut_seq, 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 5, ut_drop, 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 6, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 7, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 8, telemetry_baud(), 7, MENU_STYLE_NORMAL);
     }
     mt9v03x_finish_flag = 0;
   }

@@ -35,7 +35,5 @@ void menu_port_draw_uint (uint8_t col, uint8_t row, uint32_t v, uint8_t width, m
 void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint8_t dec_w, menu_style_e style);
 
 void menu_port_scan_keys(menu_key_event_t *ev);
-void menu_port_draw_key_status(void);
-uint8_t menu_port_key_pressed(menu_key_e key);
 
 #endif

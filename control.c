@@ -30,11 +30,6 @@ void control_init(void)
     g_duty_now   = 0;
 }
 
-void control_reset(void)
-{
-    control_init();
-}
-
 void control_duty_reset(void)
 {
     g_duty_now = 0;
@@ -63,8 +58,6 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     target = (uint16_t)speed_f;
     if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
-
-    out->duty_target = target;
 
     if (target > g_duty_now)
     {

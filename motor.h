@@ -14,7 +14,5 @@ void motor_apply_left_only(uint16_t duty);
 void motor_apply_servo_only(uint16_t servo_pwm);
 
 uint32_t hal_time_us(void);
-void hal_buzzer_on(void);
-void hal_buzzer_off(void);
 
 #endif
