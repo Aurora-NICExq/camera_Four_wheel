@@ -1,5 +1,4 @@
 /* cpu0_main.c */
-#include "seekfree_baud.h"
 #include "config.h"
 #include "control.h"
 #include "image.h"
@@ -41,6 +40,44 @@ int core0_main(void) {
   while (TRUE) {
     menu_task();
 
+    /* 无线 pump / UART Test 不得绑在摄像头帧上:无帧时 continue 会饿死发送,
+     * 队列只进不出 → USB 接收器指示灯永远不亮 */
+    ut_tick = 0;
+    if (menu_uart_test_mode()) {
+      uint32_t now_us = hal_time_us();
+      if (!ut_active_prev) {
+        ut_active_prev = 1;
+        ut_seq = 0;
+        ut_drop = 0;
+        ut_last_us = now_us;
+        ut_tick = 1;
+        if (!telemetry_test_banner()) {
+          ut_drop++;
+        }
+      } else if ((uint32_t)(now_us - ut_last_us) >= UART_TEST_PERIOD_US) {
+        ut_last_us = now_us;
+        ut_seq++;
+        ut_tick = 1;
+        if (!telemetry_test_send(ut_seq, now_us / 1000u)) {
+          ut_drop++;
+        }
+      }
+    } else {
+      ut_active_prev = 0;
+    }
+    telemetry_pump();
+
+    if (menu_uart_test_mode() && ut_tick) {
+      menu_port_draw_uint(8, 2, telemetry_wireless_ok(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 3, telemetry_tx_bytes(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 4, ut_seq, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 5, ut_drop, 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 6, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
+      menu_port_draw_uint(8, 7, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
+      /* BAUD 直接取自逐飞库头,不是本工程的宏——PC 助手照这个数设 */
+      menu_port_draw_uint(8, 8, telemetry_baud(), 7, MENU_STYLE_NORMAL);
+    }
+
     if (!mt9v03x_finish_flag) {
       continue;
     }
@@ -78,31 +115,6 @@ int core0_main(void) {
     {
       uint32_t telem_t_ms = armed_elapsed_us / 1000u;
       telemetry_update(telem_t_ms, telem_frame, &g_track, &out);
-    }
-    telemetry_pump();
-
-    ut_tick = 0;
-    if (menu_uart_test_mode()) {
-      uint32_t now_us = hal_time_us();
-      if (!ut_active_prev) {
-        ut_active_prev = 1;
-        ut_seq = 0;
-        ut_drop = 0;
-        ut_last_us = now_us;
-        ut_tick = 1;
-        if (!telemetry_test_banner()) {
-          ut_drop++;
-        }
-      } else if ((uint32_t)(now_us - ut_last_us) >= UART_TEST_PERIOD_US) {
-        ut_last_us = now_us;
-        ut_seq++;
-        ut_tick = 1;
-        if (!telemetry_test_send(ut_seq, now_us / 1000u)) {
-          ut_drop++;
-        }
-      }
-    } else {
-      ut_active_prev = 0;
     }
 
     if (menu_uart_test_mode()) {
@@ -185,13 +197,6 @@ int core0_main(void) {
       ips200_show_string(104, IMG_H + 68, "N/F");
       ips200_show_uint(136, IMG_H + 68, g_track.near_rows, 3);
       ips200_show_uint(168, IMG_H + 68, g_track.far_rows, 3);
-    } else if (menu_uart_test_mode() && ut_tick) {
-      /* 只在发送那一刻刷新(5Hz),静态标签由 menu_action_uart_test 画过 */
-      menu_port_draw_uint(8, 2, TELEM_UART_BAUD, 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 3, ut_seq, 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 4, ut_drop, 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 5, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
-      menu_port_draw_uint(8, 6, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
     }
     mt9v03x_finish_flag = 0;
   }

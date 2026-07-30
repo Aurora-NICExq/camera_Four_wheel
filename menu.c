@@ -4,6 +4,7 @@
 #include "control.h"
 #include "image.h"
 #include "motor.h"
+#include "telemetry.h"
 
 extern volatile float    steer_kp;
 volatile uint8_t menu_fine_step = 0;
@@ -359,17 +360,21 @@ void menu_action_uart_test(void)
     s_camera_view     = 0;
     s_calib_view      = 0;
     s_uart_test_mode  = 1;
+    telemetry_reinit(); /* 重走自动波特率握手,刷新 INIT 状态 */
     motor_stop();
     menu_port_clear();
     draw_title("UART TEST");
-    menu_port_draw_text(0, 2, "BAUD", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 3, "SENT", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 4, "DROP", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 5, "QLEN", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 6, "RTS",  MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 8, "PC: SeekFree wireless", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 9, "    assistant, same baud", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 11, "BACK: exit", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 2, "INIT", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 3, "TX",   MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 4, "SEQ",  MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 5, "DROP", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 6, "QLEN", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 7, "RTS",  MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 8, "BAUD", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 10, "INIT 1=auto baud OK", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 11, "TX must grow if RF TX", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 12, "BAUD -> set PC assistant", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 14, "BACK: exit", MENU_STYLE_NORMAL);
 }
 
 void menu_action_reset(void)

@@ -124,9 +124,16 @@
 
 /* 无线 CSV 遥测:每 TELEM_DIV 帧发一行,约 50fps 下 10Hz */
 #define TELEM_DIV (5u)
-/* 无线模块波特率:115200 对当前 CSV 遥测(约10Hz)足够。须与 PC 助手、
- * 逐飞库 WIRELESS_UART_BUAD_RATE 一致,见 seekfree_baud.h */
-#define TELEM_UART_BAUD (115200u)
+/* 波特率不在本工程定义,也无法从本工程覆盖。
+ * 真值 = 逐飞库 zf_device_wireless_uart.h 的 WIRELESS_UART_BUAD_RATE(当前 115200),
+ * 且该库开启了自动波特率(WIRELESS_UART_AUTO_BAUD_RATE=1),模块跟随 MCU。
+ *
+ * 曾有 TELEM_UART_BAUD + seekfree_baud.h 试图覆盖它,那从来没有生效过:
+ * 串口是在 zf_device_wireless_uart.c 里 uart_init 的,那个编译单元
+ * 不 include 本工程任何头文件。更糟的是库头用的是【无保护 #define】,
+ * 我们抢先定义会在 5 个编译单元里造成宏重定义(而且 token 不同:115200u vs 115200)。
+ * 已整体删除。要改波特率只有两条路:改库头,或在 ADS 工程加预处理器宏。
+ * PC 助手按 UART Test 页显示的 BAUD 设即可——那个值直接取自库头。 */
 
 /* ---------------- Race Preset:低/中/高三档 ----------------
  * 菜单 Race Preset 进入子页面选择档位,ENTER 应用。
