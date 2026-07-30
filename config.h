@@ -5,7 +5,9 @@
 #define IMG_W (188)
 #define IMG_H (120)
 #define IMG_CENTER (94)
-#define FRAMES_PER_SECOND (50)
+/* 曾有 FRAMES_PER_SECOND(50):全仓无人读取,纯孤儿宏,已删。
+ * 帧率不参与任何计算——凡与挂钟时间相关的逻辑都用 hal_time_us(),
+ * 因为主循环会因图像处理/屏幕刷新掉帧,按名义帧率折算时间是错的 */
 
 /* arm 后延时发车 + 定时停车,基于 STM 硬件时钟(hal_time_us)按挂钟时间计:
  * 帧计数会因图像处理/屏幕刷新拖慢主循环而掉帧合并、严重失真,挂钟时间不会。
