@@ -105,6 +105,8 @@ int core0_main(void) {
       motor_reset();
     } else if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
+    } else if (menu_left_test_mode()) {
+      motor_apply_left_only(MOTOR_TEST_DUTY);
     } else if (menu_align_test_mode()) {
       motor_apply_servo_only(out.servo_pwm);
     } else if (drive_en && drive_armed) {

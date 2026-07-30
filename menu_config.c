@@ -31,6 +31,7 @@ const menu_item_t menu_items[] = {
     MENU_ACTION("Camera",       menu_action_camera),
     MENU_ACTION("Align Test",   menu_action_align_test),
     MENU_ACTION("Motor Test",   menu_action_motor_test),
+    MENU_ACTION("Left Test",    menu_action_left_test),
     MENU_ACTION("UART Test",    menu_action_uart_test),
     MENU_ACTION("Restore Def",  menu_action_defaults),
 };

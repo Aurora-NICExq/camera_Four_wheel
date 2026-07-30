@@ -62,6 +62,7 @@ static nav_state_e       s_nav;
 static uint8_t           s_camera_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
+static uint8_t           s_left_test_mode;
 static uint8_t           s_uart_test_mode;
 static uint8_t           s_preset_cursor;       // 预设子页面选中档位
 static uint8_t           s_cursor;              // 选中项索引
@@ -312,6 +313,7 @@ void menu_action_camera(void)
 {
     s_align_test_mode = 0;
     s_motor_test_mode = 0;
+    s_left_test_mode  = 0;
     s_uart_test_mode  = 0;
     s_camera_view = 1;
 }
@@ -319,6 +321,7 @@ void menu_action_camera(void)
 void menu_action_align_test(void)
 {
     s_motor_test_mode = 0;
+    s_left_test_mode  = 0;
     s_uart_test_mode  = 0;
     s_align_test_mode = 1;
     s_camera_view = 1;
@@ -328,6 +331,7 @@ void menu_action_align_test(void)
 void menu_action_motor_test(void)
 {
     s_align_test_mode = 0;
+    s_left_test_mode  = 0;
     s_uart_test_mode  = 0;
     s_camera_view = 0;
     s_motor_test_mode = 1;
@@ -338,10 +342,29 @@ void menu_action_motor_test(void)
     menu_port_draw_text(0, 4, "BACK: stop", MENU_STYLE_NORMAL);
 }
 
+/* 只开 pins.h 里 LEFT 的两路 PWM。转的是哪侧轮 = 软件 LEFT 对应哪侧 */
+void menu_action_left_test(void)
+{
+    s_align_test_mode = 0;
+    s_motor_test_mode = 0;
+    s_uart_test_mode  = 0;
+    s_camera_view = 0;
+    s_left_test_mode = 1;
+    motor_stop();
+    menu_port_clear();
+    draw_title("Left Test");
+    menu_port_draw_text(0, 2, "Only LEFT PWM", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 3, "Duty: 20%", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 5, "See which side", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 6, "spins", MENU_STYLE_NORMAL);
+    menu_port_draw_text(0, 8, "BACK: stop", MENU_STYLE_NORMAL);
+}
+
 void menu_action_uart_test(void)
 {
     s_align_test_mode = 0;
     s_motor_test_mode = 0;
+    s_left_test_mode  = 0;
     s_camera_view     = 0;
     s_uart_test_mode  = 1;
     telemetry_reinit();
@@ -380,6 +403,11 @@ uint8_t menu_motor_test_mode(void)
     return s_motor_test_mode;
 }
 
+uint8_t menu_left_test_mode(void)
+{
+    return s_left_test_mode;
+}
+
 uint8_t menu_uart_test_mode(void)
 {
     return s_uart_test_mode;
@@ -404,6 +432,17 @@ static void menu_handle_key(const menu_key_event_t *ev)
         if (ev->key == MENU_KEY_BACK)
         {
             s_motor_test_mode = 0;
+            motor_stop();
+            draw_list_full();
+        }
+        return;
+    }
+
+    if (s_left_test_mode)
+    {
+        if (ev->key == MENU_KEY_BACK)
+        {
+            s_left_test_mode = 0;
             motor_stop();
             draw_list_full();
         }

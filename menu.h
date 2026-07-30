@@ -44,12 +44,14 @@ void menu_action_race_preset(void);
 void menu_action_camera(void);
 void menu_action_align_test(void);
 void menu_action_motor_test(void);
+void menu_action_left_test(void);
 void menu_action_uart_test(void);
 void menu_action_reset(void);
 
 uint8_t menu_camera_view(void);
 uint8_t menu_align_test_mode(void);
 uint8_t menu_motor_test_mode(void);
+uint8_t menu_left_test_mode(void);
 uint8_t menu_uart_test_mode(void);
 
 #endif
