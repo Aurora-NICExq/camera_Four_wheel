@@ -17,6 +17,7 @@ typedef struct
     uint8_t  valid_rows;
     int16_t  error;
     uint8_t  err_hold;
+    uint8_t  look_rows; /* 本帧前瞻窗内实际参与行数;0 = 前瞻塌陷走 hold */
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
@@ -29,9 +30,8 @@ typedef struct
 
 extern volatile int16_t image_threshold;
 extern volatile uint8_t image_cross_fill;
-extern volatile uint16_t steer_w_duty_ref;
 
-void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
+void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out);
 
 /* Camera 调试:二值底图 + 彩色边线/中线叠加,纯显示不参与控制 */
 void image_debug_show(const track_info_t *ti);

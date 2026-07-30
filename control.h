@@ -22,7 +22,6 @@ extern volatile uint8_t  drive_armed;
 extern volatile uint8_t  drive_timed_out;
 extern volatile uint16_t drive_stop_time_s;
 extern volatile uint16_t drive_duty_base;
-extern volatile uint16_t control_duty_prev;
 
 void control_init(void);
 void control_reset(void);

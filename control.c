@@ -11,7 +11,6 @@ volatile uint8_t  drive_armed        = 0;
 volatile uint8_t  drive_timed_out    = 0;
 volatile uint16_t drive_stop_time_s  = DRIVE_ARMED_TIMEOUT_S;
 volatile uint16_t drive_duty_base    = STRAIGHT_DUTY;
-volatile uint16_t control_duty_prev  = 0;
 
 static int16_t  g_prev_error;
 static float    g_d_filt;
@@ -52,7 +51,6 @@ void control_init(void)
 void control_reset(void)
 {
     control_init();
-    control_duty_prev = 0;
 }
 
 void control_duty_reset(void)

@@ -6,7 +6,6 @@
 
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
-volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
@@ -662,7 +661,7 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     ti->valid_rows = (uint8_t)(hi - lo + 1u);
 
     /* 裁掉远端连续双丢行:搜索未到达或沿图像黑框爬行的行只有假居中数据,
-       留在 valid_rows 里会稀释 weighted_error,并让 curve_temp 在入弯口失明 */
+       留在 valid_rows 里会稀释前瞻误差,并让 curve_temp 在入弯口失明 */
     while (ti->valid_rows > 0u)
     {
         uint8_t far_tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + ti->valid_rows - 1u);
@@ -676,46 +675,41 @@ static void export_track(track_info_t *ti, uint8_t hightest)
     ti->both_lost_rows = both_lost;
 }
 
-static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
+static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out)
 {
-    static const uint8_t w_low[STEER_W_BANDS]  = STEER_WEIGHTS_LOWSPEED;
-    static const uint8_t w_high[STEER_W_BANDS] = STEER_WEIGHTS_HIGHSPEED;
-
-    uint16_t ref = steer_w_duty_ref;
-    uint32_t k;
-
-    if (ref == 0u) ref = DUTY_HARD_CAP; /* 除零兜底 */
-    k = ((uint32_t)duty_now * 256u) / ref;
-    if (k > 256u) k = 256u;
-
+    const uint8_t span = (uint8_t)(STEER_LOOK_HI - STEER_LOOK_LO);
     int32_t acc = 0;
-    int32_t w_sum = 0;
-    uint8_t r;
+    uint8_t n = 0;
+    uint8_t r = STEER_LOOK_HI;
 
-    /* export_track 从 TR_ROW(EIGHTN_START_ROW) 起写入,track 行 0 无数据;
-       band 仍按相对行号划分 */
-    for (r = 0; r < ti->valid_rows; r++)
+    /* 从窗口最远端往近端滑,收满 span 个"至少有一侧边线"的行就停。
+     * export_track 从 TR_ROW(EIGHTN_START_ROW) 起写入;r 为相对近端行号。
+     *
+     * 这里不再用 valid_rows 钳窗口上界。原因有两条:
+     * 1) 那个钳位是多余的——export_track 把全部行先初始化成双边丢线,
+     *    八邻域没爬到的行下面那句 continue 已经排除,钳位不改变任何结果。
+     * 2) 固定窗口 + 钳位的组合有一个硬悬崖:valid_rows <= STEER_LOOK_LO 时
+     *    窗口整个落在视野之外 -> n=0 -> 走 hold -> 误差每帧 x3/4 衰减归零
+     *    -> 舵机回中。急弯中段正是这个工况,车会直着冲到赛道边缘,
+     *    等视野恢复后真误差突然回来,表现为"先回中、快出赛道才猛打满"。
+     * 改成往近端滑动后:看得远就用远的,看不远就用看得到的最远一段,
+     * 前瞻只会变短,不会消失。不新增任何可调参数(span 由 LO/HI 算出)。 */
+    while (r > 0u && n < span)
     {
-        uint8_t tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + r);
-        uint8_t band = (uint8_t)(r / STEER_W_BAND_ROWS);
-        if (band >= STEER_W_BANDS) band = STEER_W_BANDS - 1;
-        int32_t w = (int32_t)w_low[band] * (int32_t)(256u - k)
-                  + (int32_t)w_high[band] * (int32_t)k;
+        uint8_t tr;
 
-        /* 双边丢线行没有中线信息:假居中票会把误差往 0 拉。排除,不是折扣。 */
+        r--;
+        tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + r);
         if (ti->left_lost[tr] && ti->right_lost[tr])
         {
             continue;
         }
-        /* 曾有单边×50%、补线×70% 折扣,已删:折扣救不了错 mid。 */
-        acc   += w * ((int16_t)ti->mid[tr] - IMG_CENTER);
-        w_sum += w;
+        acc += (int16_t)ti->mid[tr] - IMG_CENTER;
+        n++;
     }
 
-    /* 盲区误差保持:十字开口等大面积丢线时有效权重塌陷,
-       沿用进入盲区前的误差保持原修正弧线穿过;直进时保持的恰好是 0,
-       与常规行为一致。超时后按比例衰减回中兜底 */
-    if (w_sum < ERR_HOLD_W_MIN)
+    *look_n_out = n;
+    if (n == 0u)
     {
         if (g_hold_frames < ERR_HOLD_MAX_FRAMES)
         {
@@ -728,13 +722,14 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         return g_err_hold;
     }
     g_hold_frames = 0;
-    g_err_hold = (int16_t)(acc / w_sum);
+    g_err_hold = (int16_t)(acc / (int32_t)n);
     return g_err_hold;
 }
 
-void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
+void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
 {
     uint8_t th;
+    uint8_t look_n;
 
     init_cross_meta(out);
     cross_flag = 0;
@@ -769,7 +764,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_inf
         export_track(out, EIGHTN_START_ROW + 1u);
     }
 
-    out->error = weighted_error(out, duty_now);
+    out->error = look_ahead_error(out, &look_n);
+    out->look_rows = look_n;
     out->err_hold = g_hold_frames;
 }
 

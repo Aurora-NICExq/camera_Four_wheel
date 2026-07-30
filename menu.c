@@ -13,7 +13,6 @@ extern volatile float    steer_kd;
 extern volatile float    steer_d_filt_alpha;
 extern volatile int16_t  image_threshold;
 extern volatile uint8_t  image_cross_fill;
-extern volatile uint16_t steer_w_duty_ref;
 
 #define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
 #define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
@@ -37,7 +36,6 @@ typedef struct
     float    d_alpha;
     int16_t  threshold;
     uint8_t  cross_fill;
-    uint16_t w_ref;
     uint16_t duty;
     uint16_t stop_time;
 } preset_t;
@@ -47,17 +45,17 @@ static const preset_t s_presets[PRESET_COUNT] = {
       PRESET_LOW_KP, PRESET_LOW_KD,
       PRESET_LOW_D_ALPHA,
       PRESET_LOW_THRESHOLD, PRESET_LOW_CROSS_FILL,
-      PRESET_LOW_W_REF, PRESET_LOW_DUTY, PRESET_LOW_STOP_TIME },
+      PRESET_LOW_DUTY, PRESET_LOW_STOP_TIME },
     { "Mid  (tested)",
       PRESET_MID_KP, PRESET_MID_KD,
       PRESET_MID_D_ALPHA,
       PRESET_MID_THRESHOLD, PRESET_MID_CROSS_FILL,
-      PRESET_MID_W_REF, PRESET_MID_DUTY, PRESET_MID_STOP_TIME },
+      PRESET_MID_DUTY, PRESET_MID_STOP_TIME },
     { "High (= Default)",
       PRESET_HIGH_KP, PRESET_HIGH_KD,
       PRESET_HIGH_D_ALPHA,
       PRESET_HIGH_THRESHOLD, PRESET_HIGH_CROSS_FILL,
-      PRESET_HIGH_W_REF, PRESET_HIGH_DUTY, PRESET_HIGH_STOP_TIME },
+      PRESET_HIGH_DUTY, PRESET_HIGH_STOP_TIME },
 };
 
 static nav_state_e       s_nav;
@@ -274,7 +272,6 @@ static void apply_preset(const preset_t *p)
     steer_d_filt_alpha = p->d_alpha;
     image_threshold    = p->threshold;
     image_cross_fill   = p->cross_fill;
-    steer_w_duty_ref   = p->w_ref;
     drive_duty_base    = p->duty;
     drive_stop_time_s  = p->stop_time;
 }

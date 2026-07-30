@@ -27,22 +27,32 @@
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
-#define STEER_W_BANDS (8)
-#define STEER_W_BAND_ROWS (15)
-#define STEER_WEIGHTS_LOWSPEED {8, 10, 9, 6, 4, 2, 1, 0}
-#define STEER_WEIGHTS_HIGHSPEED {2, 4, 6, 9, 10, 8, 5, 2}
-/* 前瞻归一化基准:占空比达到该值时权重完全切到高速(远端)表。
- * 必须设成实际能跑到的顶速,设成 DUTY_HARD_CAP 会让远端表永远吃不满,
- * 车始终"看半近半远"、等偏差出现才起手,峰值打角偏大 */
-#define STEER_W_DUTY_REF (3800)
-/* 曾有两个逐行折扣,均已删除(见 image.c weighted_error 内注释):
- *   STEER_W_SINGLE_EDGE_PCT (50)  单边丢线行降权
- *   STEER_W_CROSS_FILL_PCT  (70)  十字补线行降权
- * 折扣救不了错 mid;不要再加回来。 */
-/* 盲区误差保持:双边丢线行没有中线信息,不再投"假居中"票;
- * 有效权重塌陷(视野基本全是开口)时沿用进入盲区前的误差,
+/* 单段前瞻:从 STEER_LOOK_HI 这一行(最远)往近端滑,取头 (HI-LO) 个
+ * "至少有一侧边线"的行做均匀平均。全部权重在这一段上,
+ * 无近端混合、无速度交叉淡入、无 W Ref。
+ *
+ * 再往远给:85~115(旧 75~105,更早 60~90)。
+ * HI 决定"从多远开始看",HI-LO 决定"取多少行"(当前 30 行)。
+ *
+ * 窗口不再被 valid_rows 钳住(见 image.c look_ahead_error 内注释):
+ * 旧的"固定窗口 + valid_rows 钳位"在 valid_rows <= LO 时窗口整个落空,
+ * 走 hold 衰减归零 -> 急弯中段舵机回中。现在改为往近端滑动,
+ * 看不到远处就用看得到的最远一段,前瞻只会变短不会消失。 */
+#define STEER_LOOK_LO (85)
+#define STEER_LOOK_HI (115)
+/* 越界护栏:tr = TR_ROW(EIGHTN_START_ROW) + r = 1 + r,r 最大 HI-1,
+ * 故 HI 必须 <= IMG_H - 1,否则 mid[]/left_lost[] 会越界读 */
+#if (STEER_LOOK_HI > IMG_H - 1)
+#error "STEER_LOOK_HI too large: tr index would exceed IMG_H-1"
+#endif
+#if (STEER_LOOK_LO >= STEER_LOOK_HI)
+#error "STEER_LOOK_LO must be < STEER_LOOK_HI (span = HI - LO)"
+#endif
+/* 曾有 8 段低/高速权重表 + W Ref 按 duty 交叉淡入,已删:
+ * Duty≈WRef 时才吃满远表,常用预设 k≈137 实际半近半远——旋钮在互抵(R1)。
+ * 曾有单边/补线逐行折扣,已删。 */
+/* 盲区误差保持:前瞻窗内无有效行时沿用进入盲区前的误差,
  * 最多保持 N 帧,超时每帧 ×3/4 衰减回中 */
-#define ERR_HOLD_W_MIN (120)
 #define ERR_HOLD_MAX_FRAMES (20)
 
 /* 八邻域双边巡线(已从最长白列硬回退) */
@@ -118,18 +128,16 @@
  * 应用时先 apply_defaults 全量恢复(含 Armed=OFF、Fine Step=OFF),
  * 再逐项覆盖——显式写全每一项,保证进入的是完整可复现的状态。 */
 
-/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100 WRef=3800 */
+/* 低速档:实测验证可行组 Kp=2.29 Kd=1.49 Duty=2100(原含 WRef,已删除) */
 #define PRESET_LOW_KP           (2.29f)
 #define PRESET_LOW_KD         (1.49f)
 #define PRESET_LOW_D_ALPHA    (0.40f)
 #define PRESET_LOW_THRESHOLD  (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_W_REF      (3800)
 #define PRESET_LOW_DUTY       (2100)
 #define PRESET_LOW_STOP_TIME  (105)
 
-/* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200 WRef=6000。
- * 与低速档的差别只有基准速度和 W Ref(以及被迫抬高的 Kd)。
+/* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200(原含 WRef,已删除)。
  * 注:Curve Duty / Str Duty 已于 c24f320 删除,速度全程只由菜单 Duty 决定,
  * 急弯降速只剩 rows_duty_cap 这一条图像质量安全网 */
 #define PRESET_MID_KP           (KP)
@@ -137,7 +145,6 @@
 #define PRESET_MID_D_ALPHA    (0.40f)
 #define PRESET_MID_THRESHOLD  (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_W_REF      (6000)
 #define PRESET_MID_DUTY       (3200)
 #define PRESET_MID_STOP_TIME  (28)
 
@@ -150,7 +157,6 @@
 #define PRESET_HIGH_D_ALPHA    (D_FILT_ALPHA)
 #define PRESET_HIGH_THRESHOLD  (0)
 #define PRESET_HIGH_CROSS_FILL (1)
-#define PRESET_HIGH_W_REF      (STEER_W_DUTY_REF)
 #define PRESET_HIGH_DUTY       (STRAIGHT_DUTY)
 #define PRESET_HIGH_STOP_TIME  (DRIVE_ARMED_TIMEOUT_S)
 

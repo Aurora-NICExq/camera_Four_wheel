@@ -194,8 +194,8 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     if (s_need_header)
     {
         if (queue_push_line(
-                "# t_ms,err,hold,srv,dty,tgt,cap,row,lst,th,crs,"
-                "kp100,kd100,wref\r\n"))
+                "# t_ms,err,hold,look,srv,dty,tgt,cap,row,lst,th,crs,"
+                "kp100,kd100\r\n"))
         {
             s_need_header = 0u;
         }
@@ -211,6 +211,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
+                   (unsigned)ti->look_rows,
                    (unsigned)out->servo_pwm,
                    (unsigned)out->duty,
                    (unsigned)out->duty_target,
@@ -220,8 +221,7 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
                    (unsigned)ti->threshold,
                    (unsigned)ti->cross_valid,
                    (unsigned)(uint32_t)(steer_kp * 100.0f + 0.5f),
-                   (unsigned)(uint32_t)(steer_kd * 100.0f + 0.5f),
-                   (unsigned)steer_w_duty_ref);
+                   (unsigned)(uint32_t)(steer_kd * 100.0f + 0.5f));
     if (len > 0)
     {
         uint16_t send_len = (len < (int)sizeof(buf))
