@@ -753,7 +753,6 @@ static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, u
     }
 }
 
-static uint8_t calib_bin[IMG_H][IMG_W];
 static uint8_t g_calib_last_th = 0;
 
 static uint8_t image_resolve_threshold(const uint8_t img[IMG_H][IMG_W])
@@ -770,21 +769,21 @@ uint8_t image_calib_last_th(void)
     return g_calib_last_th;
 }
 
-/* 校准视图:raw 二值化,不做 3x3 滤波,黑区不被填白 */
+/* 校准视图:raw 二值化,不做 3x3 滤波,黑区不被填白。
+   刻意不调 image_filter():校准就是要看未去噪的原始阈值效果,
+   否则环岛等内部黑区会被 3x3 填白,看不出真实的阈值边界。
+
+   复用 image_bin,不再单独占一份 IMG_H*IMG_W = 22560 字节的缓冲。
+   安全性依据:Calib 页与 Camera 页在 cpu0_main 里是 if/else if 互斥,
+   image_process() 当帧已经跑完、之后没有任何代码再读 image_bin,
+   下一帧 binarize() 会把它整个重写。 */
 uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W])
 {
     uint8_t th = image_resolve_threshold(img);
-    uint16_t r, c;
 
     g_calib_last_th = th;
-    for (r = 0; r < IMG_H; r++)
-    {
-        for (c = 0; c < IMG_W; c++)
-        {
-            calib_bin[r][c] = (img[r][c] >= th) ? IMG_WHITE : IMG_BLACK;
-        }
-    }
-    ips200_show_gray_image(0, 0, (const uint8 *)calib_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
+    binarize(img, th); /* 与原来那段手写双循环等价,顺带去掉一份重复代码 */
+    ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
     return th;
 }
 
