@@ -1,5 +1,3 @@
-/* cpu1_main.c - CPU1 idle core */
-
 #include "zf_common_headfile.h"
 #pragma section all "cpu1_dsram"
 

@@ -1,4 +1,3 @@
-/* cpu0_main.c */
 #include "config.h"
 #include "control.h"
 #include "image.h"
@@ -33,15 +32,14 @@ int core0_main(void) {
   uint8_t drive_en = 1;
   uint32_t telem_frame = 0;
   control_out_t out = {0};
-  /* UART Test 页状态。计时一律用 hal_time_us,不用帧计数 */
+
   uint32_t ut_seq = 0, ut_drop = 0, ut_last_us = 0;
   uint8_t ut_active_prev = 0, ut_tick = 0;
 
   while (TRUE) {
     menu_task();
 
-    /* 无线 pump / UART Test 不得绑在摄像头帧上:无帧时 continue 会饿死发送,
-     * 队列只进不出 → USB 接收器指示灯永远不亮 */
+
     ut_tick = 0;
     if (menu_uart_test_mode()) {
       uint32_t now_us = hal_time_us();
@@ -74,7 +72,7 @@ int core0_main(void) {
       menu_port_draw_uint(8, 5, ut_drop, 7, MENU_STYLE_NORMAL);
       menu_port_draw_uint(8, 6, telemetry_queue_depth(), 7, MENU_STYLE_NORMAL);
       menu_port_draw_uint(8, 7, telemetry_rts_blocked(), 7, MENU_STYLE_NORMAL);
-      /* BAUD 直接取自逐飞库头,不是本工程的宏——PC 助手照这个数设 */
+
       menu_port_draw_uint(8, 8, telemetry_baud(), 7, MENU_STYLE_NORMAL);
     }
 
@@ -110,7 +108,7 @@ int core0_main(void) {
     control_update(&g_track, &out);
 
     telem_frame++;
-    /* UART Test 期间不发 CSV:两种输出交织在一条链路上会让自检结果没法读 */
+
     if (drive_armed && !menu_uart_test_mode())
     {
       uint32_t telem_t_ms = armed_elapsed_us / 1000u;
@@ -118,7 +116,7 @@ int core0_main(void) {
     }
 
     if (menu_uart_test_mode()) {
-      motor_reset(); /* 自检页禁止整车动作,即使 Armed 还是 ON */
+      motor_reset();
     } else if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
     } else if (menu_align_test_mode()) {
@@ -162,8 +160,7 @@ int core0_main(void) {
       drive_timed_out = 0;
     }
 
-    /* 调试画面会显著拖慢主循环(全屏 SPI 传输),仅供停车调试与低速验证,
-       高速跑圈前务必 BACK 退出 */
+
     if (menu_calib_view()) {
       uint8_t th = image_calib_show((const uint8_t (*)[IMG_W])mt9v03x_image);
       ips200_show_string(0, IMG_H + 4, "TH");

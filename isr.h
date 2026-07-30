@@ -1,5 +1,3 @@
-/* isr.h - ISR declarations */
-
 #ifndef _isr_h
 #define _isr_h
 

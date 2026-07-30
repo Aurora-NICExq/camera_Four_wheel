@@ -1,18 +1,15 @@
-/* image.c - 最长白列巡线 + 十字拐点补线(移植自 18 届 Camera.c)
- * 取代原八邻域双边跟踪:列扫描找最长连续白列作为搜索基准,
- * 再逐行向左右找边界;十字用上/下拐点配对后连线补齐 */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
 #include "zf_common_headfile.h"
 
 volatile int16_t  image_threshold  = 0;
-volatile uint8_t  image_cross_fill = 1;   /* 菜单 Cross Fill */
-volatile uint16_t steer_far_w_pct  = STEER_FAR_W_PCT;  /* 菜单 Far W%:远段占比 */
+volatile uint8_t  image_cross_fill = 1;
+volatile uint16_t steer_far_w_pct  = STEER_FAR_W_PCT;
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
-#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
+#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir)))
 
 static uint8_t image_bin[IMG_H][IMG_W];
 static int16_t left_line[IMG_H];
@@ -27,7 +24,7 @@ static int16_t both_lost_time;
 static int16_t left_lost_flag[IMG_H];
 static int16_t right_lost_flag[IMG_H];
 
-static int16_t g_err_hold;      /* 盲区误差保持 */
+static int16_t g_err_hold;
 static uint8_t g_hold_frames;
 static int16_t left_up_find;
 static int16_t left_down_find;
@@ -566,8 +563,7 @@ static void image_filter(uint8_t bin[IMG_H][IMG_W])
     }
 }
 
-/* 导出到 track 坐标。注意:最长白列版的 track 行 0 = 最近车行,
-   与原八邻域版(从行 1 起写)不同,control.c 的 track_near_row 已同步为 0 */
+
 static void export_track(track_info_t *ti)
 {
     int     ir;
@@ -587,9 +583,7 @@ static void export_track(track_info_t *ti)
     ti->valid_rows     = rows;
     ti->both_lost_rows = (uint8_t)both_lost_time;
 
-    /* 半宽种子:搜索带内最近的一条双边可见行。
-       只能在 tr < rows 内找——带外行的 left/right 是初始化残值 0 / IMG_W-1,
-       且 lost 标志也是 0,看起来像"双边可见的满宽行",会把半宽污染成 93 */
+
     half_w = TRACK_HALF_W_FALLBACK;
     for (tr = 0; tr < rows; tr++)
     {
@@ -600,13 +594,7 @@ static void export_track(track_info_t *ti)
         }
     }
 
-    /* 近→远单趟重建 mid。这里取代了原来无条件的 (left+right)/2:
-       丢线侧会被搜索循环钳到画面边界(left=2 或 right=IMG_W-3),
-       拿假边界算出的中点是假值,偏差幅度和符号逐行逐帧变化。
-       原先靠 STEER_W_SINGLE_EDGE_PCT 打 50% 折掩盖,现在直接算对(R5:修上游)。
-         双边可见 → 真中点,并刷新半宽(赛道像素宽度随行号透视变化)
-         单边可见 → 可见边 ± 半宽
-         双边丢线 → 无中线信息,置中心仅供显示,下游不投票 */
+
     for (tr = 0; tr < rows; tr++)
     {
         uint8_t ll = ti->left_lost[tr];
@@ -635,14 +623,11 @@ static void export_track(track_info_t *ti)
     }
     for (tr = rows; tr < IMG_H; tr++)
     {
-        ti->mid[tr] = IMG_CENTER; /* 搜索带外:无信息 */
+        ti->mid[tr] = IMG_CENTER;
     }
 }
 
-/* 两段前瞻误差。取代原 weighted_error():
-   8 段权重表 × 速度交叉淡入 × 逐行折扣 → 近/远两段均匀平均 + 一个混合比。
-   段内均匀:没有隐藏的权重曲线,"参与"与"不参与"是二值的。
-   不含 duty:同一个弯在任何速度下算出同一个误差,Kp 的含义不再漂移(R3)。 */
+
 static int16_t two_band_error(track_info_t *ti)
 {
     int32_t near_acc = 0;
@@ -654,7 +639,7 @@ static int16_t two_band_error(track_info_t *ti)
     int32_t err;
     int32_t fw;
 
-    /* 远段上界与视野同时钳住:看不到 STEER_FAR_ROW_HI 行就用看得到的部分 */
+
     hi = (ti->valid_rows < (uint8_t)STEER_FAR_ROW_HI)
        ? ti->valid_rows : (uint8_t)STEER_FAR_ROW_HI;
 
@@ -664,7 +649,7 @@ static int16_t two_band_error(track_info_t *ti)
 
         if (ti->left_lost[r] && ti->right_lost[r])
         {
-            continue; /* 双边丢线:无中线信息,不投假居中票 */
+            continue;
         }
         dev = (int32_t)ti->mid[r] - IMG_CENTER;
         if (r < (uint8_t)STEER_SPLIT_ROW)
@@ -678,14 +663,14 @@ static int16_t two_band_error(track_info_t *ti)
             far_n++;
         }
     }
-    /* R6:参与行数必须可观测。far_rows 送遥测,远段塌陷不再是隐形的 */
+
     ti->near_rows = near_n;
     ti->far_rows  = far_n;
 
     if (near_n == 0u && far_n == 0u)
     {
-        /* 两段都没有一行投票 → 盲区保持。触发条件是定死的"投票行数为 0",
-           不再是随权重表变化的 w_sum 阈值 */
+
+
         if (g_hold_frames < ERR_HOLD_MAX_FRAMES)
         {
             g_hold_frames++;
@@ -702,8 +687,8 @@ static int16_t two_band_error(track_info_t *ti)
 
     if (far_n == 0u)
     {
-        /* 远段空(视野不到分段行,或远段整段是开口)→ 退化为纯近段。
-           这是唯一的前瞻降级路径,由 far_rows=0 在遥测里标出 */
+
+
         err = near_acc / (int32_t)near_n;
     }
     else if (near_n == 0u)
@@ -769,20 +754,13 @@ uint8_t image_calib_last_th(void)
     return g_calib_last_th;
 }
 
-/* 校准视图:raw 二值化,不做 3x3 滤波,黑区不被填白。
-   刻意不调 image_filter():校准就是要看未去噪的原始阈值效果,
-   否则环岛等内部黑区会被 3x3 填白,看不出真实的阈值边界。
 
-   复用 image_bin,不再单独占一份 IMG_H*IMG_W = 22560 字节的缓冲。
-   安全性依据:Calib 页与 Camera 页在 cpu0_main 里是 if/else if 互斥,
-   image_process() 当帧已经跑完、之后没有任何代码再读 image_bin,
-   下一帧 binarize() 会把它整个重写。 */
 uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W])
 {
     uint8_t th = image_resolve_threshold(img);
 
     g_calib_last_th = th;
-    binarize(img, th); /* 与原来那段手写双循环等价,顺带去掉一份重复代码 */
+    binarize(img, th);
     ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
     return th;
 }
@@ -837,9 +815,7 @@ void image_debug_show(const track_info_t *ti)
     }
 }
 
-/* 注意:不收 duty 入参。旧版本靠 duty 在两张权重表之间淡入,那是隐式增益调度——
-   同一个弯在不同速度下算出不同误差,Kp 的实测值失去可比性(CLAUDE.md R3)。
-   现在感知与控制量彻底解耦,control_duty_prev 也随之删除 */
+
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
 {
     uint8_t th;
@@ -850,8 +826,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
     out->threshold = th;
 
     binarize(img, th);
-    /* 最长白列以"自底向上连续白像素数"为核心度量,单个黑噪点会截断整列并
-       大幅改变 search_stop_line,故保留 3x3 去噪(历史版本没有这一步) */
+
+
     image_filter(image_bin);
     longest_white_column();
     if (image_cross_fill)
@@ -861,7 +837,7 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
     export_track(out);
 
     out->error = two_band_error(out);
-    /* two_band_error 内部:实测帧把 g_hold_frames 清 0,盲区帧递增到上限。
-       在这里导出,让"这一帧的误差是不是真的"进遥测 */
+
+
     out->err_hold = g_hold_frames;
 }

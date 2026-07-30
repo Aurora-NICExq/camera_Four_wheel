@@ -1,9 +1,6 @@
-/* isr.c - interrupt service routines */
-
 #include "isr_config.h"
 #include "isr.h"
 
-// TC default: no nest; call interrupt_global_enable(0) inside ISR to allow nesting
 
 IFX_INTERRUPT(cc60_pit_ch0_isr, 0, CCU6_0_CH0_ISR_PRIORITY)
 {
@@ -38,8 +35,8 @@ IFX_INTERRUPT(exti_ch0_ch4_isr, 0, EXTI_CH0_CH4_INT_PRIO)
     if(exti_flag_get(ERU_CH0_REQ0_P15_4))
     {
         exti_flag_clear(ERU_CH0_REQ0_P15_4);
-        /* 车上无 IMU,原 imu660rc_callback() 已删;
-           向量与优先级保持原样,不得改名或移除 */
+
+
     }
 
     if(exti_flag_get(ERU_CH4_REQ13_P15_5))
@@ -56,8 +53,8 @@ IFX_INTERRUPT(exti_ch1_ch5_isr, 0, EXTI_CH1_CH5_INT_PRIO)
     if(exti_flag_get(ERU_CH1_REQ10_P14_3))
     {
         exti_flag_clear(ERU_CH1_REQ10_P14_3);
-        /* 车上无 TOF,原 tof_module_exti_handler() 已删;
-           向量与优先级保持原样,不得改名或移除 */
+
+
     }
 
     if(exti_flag_get(ERU_CH5_REQ1_P15_8))
@@ -67,15 +64,7 @@ IFX_INTERRUPT(exti_ch1_ch5_isr, 0, EXTI_CH1_CH5_INT_PRIO)
     }
 }
 
-// IFX_INTERRUPT(exti_ch2_ch6_isr, 0, EXTI_CH2_CH6_INT_PRIO)
-// {
-//  {
-//      exti_flag_clear(ERU_CH2_REQ7_P00_4);
-//  }
-//  {
-//      exti_flag_clear(ERU_CH6_REQ9_P20_0);
-//  }
-// }
+
 IFX_INTERRUPT(exti_ch3_ch7_isr, 0, EXTI_CH3_CH7_INT_PRIO)
 {
     interrupt_global_enable(0);
@@ -143,9 +132,8 @@ IFX_INTERRUPT(uart3_tx_isr, 0, UART3_TX_INT_PRIO)
 IFX_INTERRUPT(uart3_rx_isr, 0, UART3_RX_INT_PRIO)
 {
     interrupt_global_enable(0);
-    /* 车上无 GNSS,原 gnss_uart_callback() 已删;
-       向量与优先级保持原样,不得改名或移除。
-       注意 uart2_rx 的 wireless_module_uart_handler() 是遥测在用的,勿删 */
+
+
 }
 
 IFX_INTERRUPT(uart0_er_isr, 0, UART0_ER_INT_PRIO)

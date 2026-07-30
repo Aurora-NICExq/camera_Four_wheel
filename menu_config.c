@@ -1,4 +1,3 @@
-/* menu_config.c */
 #include "menu.h"
 #include "config.h"
 

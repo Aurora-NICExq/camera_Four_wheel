@@ -1,5 +1,3 @@
-/* cpu0_main.h - App_Cpu0 / g_AppCpu0 */
-
 #ifndef CPU0_MAIN_H
 #define CPU0_MAIN_H
 
@@ -7,16 +5,16 @@
 
 typedef struct
 {
-    float32 sysFreq;                /**< \brief Actual SPB frequency */
-    float32 cpuFreq;                /**< \brief Actual CPU frequency */
-    float32 pllFreq;                /**< \brief Actual PLL frequency */
-    float32 stmFreq;                /**< \brief Actual STM frequency */
+    float32 sysFreq;
+    float32 cpuFreq;
+    float32 pllFreq;
+    float32 stmFreq;
 } AppInfo;
 
-/** \brief Application information */
+
 typedef struct
 {
-    AppInfo info;                               /**< \brief Info object */
+    AppInfo info;
 } App_Cpu0;
 
 IFX_EXTERN App_Cpu0 g_AppCpu0;

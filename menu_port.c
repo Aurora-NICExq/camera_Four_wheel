@@ -1,38 +1,32 @@
-/* menu_port.c - menu HAL (IPS200 + keys) */
 #include "zf_common_headfile.h"
 #include "pins.h"
 #include "config.h"
 #include "menu_port.h"
 
-/* ---- 按键输入：逐飞主板四个独立按键 KEY1~KEY4（上拉输入，按下为低） --------------------
- * 扫描/消抖/事件模型移植自另一块板（五向摇杆）实测可用的工程：
- *   - 每 KEY_SCAN_PERIOD_MS 采样一次；
- *   - 采样与稳定态连续 KEY_DEBOUNCE_COUNT 次不一致才翻转稳定态；
- *   - 仅在 释放->按下 沿置一个挂起事件位（挂起位保持到被读取，不会过期丢失）；
- *   - 长按不重复产生按下沿；UP/DOWN 连发在读取侧按稳定态+时间生成。 */
+
 #define KEY_COUNT            (4)
 #define KEY_ACTIVE_LEVEL     (GPIO_LOW)
 
 typedef struct
 {
     gpio_pin_enum pin;
-    menu_key_e    map;            /* 映射的菜单事件；MENU_KEY_NONE = 不用 */
-    uint8_t       allow_repeat;   /* 1 = 长按连发（仅 UP/DOWN） */
-    uint8_t       pressed;        /* 消抖后的稳定按下状态 */
-    uint8_t       debounce_cnt;   /* 与稳定态不一致的连续采样计数 */
-    uint32_t      press_ms;       /* 稳定态变为按下的时刻（连发计时起点） */
+    menu_key_e    map;
+    uint8_t       allow_repeat;
+    uint8_t       pressed;
+    uint8_t       debounce_cnt;
+    uint32_t      press_ms;
 } key_fsm_t;
 
-/* 数组序即挂起位序、事件优先级序 */
+
 static key_fsm_t s_keys[KEY_COUNT] =
 {
-    { PIN_KEY_UP,    MENU_KEY_UP,    1, 0, 0, 0 },   /* KEY1 P13_3 */
-    { PIN_KEY_DOWN,  MENU_KEY_DOWN,  1, 0, 0, 0 },   /* KEY2 P11_9 */
-    { PIN_KEY_ENTER, MENU_KEY_ENTER, 0, 0, 0, 0 },   /* KEY3 P11_10 */
-    { PIN_KEY_BACK,  MENU_KEY_BACK,  0, 0, 0, 0 },   /* KEY4 P11_11 */
+    { PIN_KEY_UP,    MENU_KEY_UP,    1, 0, 0, 0 },
+    { PIN_KEY_DOWN,  MENU_KEY_DOWN,  1, 0, 0, 0 },
+    { PIN_KEY_ENTER, MENU_KEY_ENTER, 0, 0, 0, 0 },
+    { PIN_KEY_BACK,  MENU_KEY_BACK,  0, 0, 0, 0 },
 };
 
-static uint8_t  s_pending = 0;         /* bit i = s_keys[i] 的按下沿事件 */
+static uint8_t  s_pending = 0;
 static uint32_t s_last_scan_ms = 0;
 static uint32_t s_last_repeat_ms = 0;
 static menu_key_e s_last_key = MENU_KEY_NONE;
@@ -53,7 +47,7 @@ static void key_scan_once(void)
 
         if (raw == s_keys[i].pressed)
         {
-            s_keys[i].debounce_cnt = 0;        /* 与稳定态一致：取消未完成的翻转 */
+            s_keys[i].debounce_cnt = 0;
         }
         else
         {
@@ -63,7 +57,7 @@ static void key_scan_once(void)
                 s_keys[i].pressed = raw;
                 s_keys[i].debounce_cnt = 0;
 
-                if (raw)                       /* 仅 释放->按下 沿生成事件 */
+                if (raw)
                 {
                     s_pending |= (uint8_t)(1u << i);
                     s_keys[i].press_ms = menu_port_millis();
@@ -115,8 +109,7 @@ void menu_port_key_scan(void)
 {
     uint32_t now_ms = menu_port_millis();
 
-    /* 实测工程以 delay(5ms) 定步调用 joystick_scan()；此处用墙钟等效：
-     * 每个周期最多扫一次，不补扫——消抖依赖"相邻采样间隔≥扫描周期"。 */
+
     if ((now_ms - s_last_scan_ms) >= (uint32)KEY_SCAN_PERIOD_MS)
     {
         s_last_scan_ms = now_ms;
@@ -156,7 +149,7 @@ void menu_port_draw_float(uint8_t col, uint8_t row, float v, uint8_t int_w, uint
     ips200_show_float((uint16)(col * 8), (uint16)(row * 16), (double)v, (uint8)int_w, (uint8)dec_w);
 }
 
-// 按键 -> 菜单事件：KEY1=上 KEY2=下 KEY3=确认 KEY4=返回
+
 void menu_port_scan_keys(menu_key_event_t *ev)
 {
     uint8_t i;
@@ -164,7 +157,7 @@ void menu_port_scan_keys(menu_key_event_t *ev)
     ev->key = MENU_KEY_NONE;
     ev->is_repeat = 0;
 
-    /* 1) 先取按下沿事件：取一个并清其挂起位 */
+
     for (i = 0; i < KEY_COUNT; i++)
     {
         uint8_t mask = (uint8_t)(1u << i);
@@ -173,7 +166,7 @@ void menu_port_scan_keys(menu_key_event_t *ev)
             s_pending &= (uint8_t)~mask;
             if (s_keys[i].map == MENU_KEY_NONE)
             {
-                continue;              /* 未映射按键：丢弃，继续找下一个 */
+                continue;
             }
             ev->key = s_keys[i].map;
             s_last_key = ev->key;
@@ -182,8 +175,7 @@ void menu_port_scan_keys(menu_key_event_t *ev)
         }
     }
 
-    /* 2) 无新按下沿：UP/DOWN 稳定按住超过 KEY_LONG_PRESS_MS 后，
-     *    每 KEY_REPEAT_MS 生成一个 is_repeat=1 事件（菜单按 10 倍步长调整）。 */
+
     for (i = 0; i < KEY_COUNT; i++)
     {
         if (s_keys[i].allow_repeat && s_keys[i].pressed)
@@ -198,7 +190,7 @@ void menu_port_scan_keys(menu_key_event_t *ev)
                 s_last_key = ev->key;
                 s_last_repeat = 1;
             }
-            break;                     /* 只看优先级最高的一个按住键 */
+            break;
         }
     }
 }

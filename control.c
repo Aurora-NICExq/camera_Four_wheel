@@ -1,4 +1,3 @@
-/* control.c - 单套 PD 转向 + 单一占空比 */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
@@ -47,7 +46,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     float    d_raw;
     int32_t  servo_raw;
 
-    /* 单套 PD:恒定比例增益,不随误差调度 */
+
     d_raw = (float)(error - g_prev_error);
     g_prev_error = error;
     g_d_filt += steer_d_filt_alpha * (d_raw - g_d_filt);
@@ -56,9 +55,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
               + (int32_t)(SERVO_DIR * (steer_kp * (float)error + steer_kd * g_d_filt));
     out->servo_pwm = control_servo_clamp(servo_raw);
 
-    /* 速度:菜单 Duty 是全程唯一来源。
-       没有曲率削速,也没有行数限速——图像劣化只由丢线保护(停车)兜底。
-       DUTY_HARD_CAP 钳位保留:菜单已限幅,但 Race Preset 是直接写变量的 */
+
     target = drive_duty_base;
     if (target > DUTY_HARD_CAP) target = DUTY_HARD_CAP;
 
@@ -71,7 +68,7 @@ void control_update(const track_info_t *ti, control_out_t *out)
     }
     else
     {
-        g_duty_now = target; /* 减速不限幅:目标降低立即跟进 */
+        g_duty_now = target;
     }
 
     out->duty       = g_duty_now;
