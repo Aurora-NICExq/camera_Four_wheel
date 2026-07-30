@@ -570,18 +570,73 @@ static void image_filter(uint8_t bin[IMG_H][IMG_W])
    与原八邻域版(从行 1 起写)不同,control.c 的 track_near_row 已同步为 0 */
 static void export_track(track_info_t *ti)
 {
-    int ir;
+    int     ir;
+    uint8_t tr;
+    uint8_t rows;
+    uint8_t half_w;
+
     for (ir = 0; ir < IMG_H; ir++)
     {
-        uint8_t tr = TR_ROW(ir);
+        tr = TR_ROW(ir);
         ti->left[tr]  = clamp_u8(left_line[ir], 0, IMG_W - 1);
         ti->right[tr] = clamp_u8(right_line[ir], 0, IMG_W - 1);
-        ti->mid[tr]   = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
         ti->left_lost[tr]  = (uint8_t)left_lost_flag[ir];
         ti->right_lost[tr] = (uint8_t)right_lost_flag[ir];
     }
-    ti->valid_rows     = (search_stop_line > 0) ? (uint8_t)search_stop_line : 0u;
+    rows = (search_stop_line > 0) ? (uint8_t)search_stop_line : 0u;
+    ti->valid_rows     = rows;
     ti->both_lost_rows = (uint8_t)both_lost_time;
+
+    /* 半宽种子:搜索带内最近的一条双边可见行。
+       只能在 tr < rows 内找——带外行的 left/right 是初始化残值 0 / IMG_W-1,
+       且 lost 标志也是 0,看起来像"双边可见的满宽行",会把半宽污染成 93 */
+    half_w = TRACK_HALF_W_FALLBACK;
+    for (tr = 0; tr < rows; tr++)
+    {
+        if (!ti->left_lost[tr] && !ti->right_lost[tr] && ti->right[tr] > ti->left[tr])
+        {
+            half_w = (uint8_t)((uint16_t)(ti->right[tr] - ti->left[tr]) / 2u);
+            break;
+        }
+    }
+
+    /* 近→远单趟重建 mid。这里取代了原来无条件的 (left+right)/2:
+       丢线侧会被搜索循环钳到画面边界(left=2 或 right=IMG_W-3),
+       拿假边界算出的中点是假值,偏差幅度和符号逐行逐帧变化。
+       原先靠 STEER_W_SINGLE_EDGE_PCT 打 50% 折掩盖,现在直接算对(R5:修上游)。
+         双边可见 → 真中点,并刷新半宽(赛道像素宽度随行号透视变化)
+         单边可见 → 可见边 ± 半宽
+         双边丢线 → 无中线信息,置中心仅供显示,下游不投票 */
+    for (tr = 0; tr < rows; tr++)
+    {
+        uint8_t ll = ti->left_lost[tr];
+        uint8_t rl = ti->right_lost[tr];
+
+        if (!ll && !rl)
+        {
+            ti->mid[tr] = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
+            if (ti->right[tr] > ti->left[tr])
+            {
+                half_w = (uint8_t)((uint16_t)(ti->right[tr] - ti->left[tr]) / 2u);
+            }
+        }
+        else if (!ll)
+        {
+            ti->mid[tr] = clamp_u8((int32_t)ti->left[tr] + (int32_t)half_w, 0, IMG_W - 1);
+        }
+        else if (!rl)
+        {
+            ti->mid[tr] = clamp_u8((int32_t)ti->right[tr] - (int32_t)half_w, 0, IMG_W - 1);
+        }
+        else
+        {
+            ti->mid[tr] = IMG_CENTER;
+        }
+    }
+    for (tr = rows; tr < IMG_H; tr++)
+    {
+        ti->mid[tr] = IMG_CENTER; /* 搜索带外:无信息 */
+    }
 }
 
 static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
@@ -617,10 +672,8 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         {
             w = (w * STEER_W_CROSS_FILL_PCT) / 100;
         }
-        else if (ti->left_lost[r] || ti->right_lost[r])
-        {
-            w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
-        }
+        /* 单边行原有 ×STEER_W_SINGLE_EDGE_PCT 折扣已删:
+           export_track 现在按半宽重建 mid,这个值不再是假值,无需打折 */
         acc   += w * ((int16_t)ti->mid[r] - IMG_CENTER);
         w_sum += w;
     }
