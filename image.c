@@ -635,6 +635,7 @@ static int16_t two_band_error(track_info_t *ti)
     uint8_t near_n   = 0;
     uint8_t far_n    = 0;
     uint8_t hi;
+    uint8_t split;
     uint8_t r;
     int32_t err;
     int32_t fw;
@@ -642,6 +643,22 @@ static int16_t two_band_error(track_info_t *ti)
 
     hi = (ti->valid_rows < (uint8_t)STEER_FAR_ROW_HI)
        ? ti->valid_rows : (uint8_t)STEER_FAR_ROW_HI;
+
+    /* 分段点按可见段的比例算,不用固定行号。
+       固定行号是个悬崖:valid_rows <= 45 时全部可见行都落进近段、far_n=0,
+       误差走 near_acc/near_n 退化分支,Far W% 读不到,急弯里前瞻不可调。
+       hi=90(满视野)时 split=45,与旧固定值相同 → 直道行为与标定不变。
+       hi<2 无法分两段,全归近段,交给下面 far_n==0 分支处理。 */
+    if (hi >= 2u)
+    {
+        split = (uint8_t)(((uint16_t)hi * (uint16_t)STEER_SPLIT_PCT) / 100u);
+        if (split == 0u) split = 1u;                   /* 近段至少 1 行 */
+        if (split >= hi) split = (uint8_t)(hi - 1u);   /* 远段至少 1 行 */
+    }
+    else
+    {
+        split = hi;
+    }
 
     for (r = 0; r < hi; r++)
     {
@@ -652,7 +669,7 @@ static int16_t two_band_error(track_info_t *ti)
             continue;
         }
         dev = (int32_t)ti->mid[r] - IMG_CENTER;
-        if (r < (uint8_t)STEER_SPLIT_ROW)
+        if (r < split)
         {
             near_acc += dev;
             near_n++;

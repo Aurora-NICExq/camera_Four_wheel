@@ -21,7 +21,14 @@
 #define OTSU_THRESHOLD_MAX (200)
 
 
-#define STEER_SPLIT_ROW  (45)
+/* 两段前瞻的分段点 = 可见段的百分比,不是固定行号。
+ * 曾用固定 STEER_SPLIT_ROW(45),那是个悬崖:valid_rows <= 45 时所有可见行
+ * 都落进近段、far_n=0,代码走 err = near_acc/near_n 这条退化分支,
+ * 于是 Far W% 根本读不到——急弯里(valid_rows≈40)瞄准行恒为 19.5,
+ * 菜单怎么调都没反应,前瞻不可调。
+ * 取 50%:hi=90 时算出 45,与原固定值完全相同,满视野行为不变(Kp/Kd 不用重调);
+ * 视野收缩时远段跟着收缩但不会消失,Far W% 在任何视野深度都有效。 */
+#define STEER_SPLIT_PCT  (50)
 #define STEER_FAR_ROW_HI (90)
 #define STEER_FAR_W_PCT  (65)
 
