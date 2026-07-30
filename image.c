@@ -698,19 +698,24 @@ static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
         w = (int32_t)w_low[band] * (int32_t)(256u - k)
           + (int32_t)w_high[band] * (int32_t)k;
 
-        /* 丢线判定优先于补线判定:补线失败被夹到边界的行同时满足两者 */
+        /* 双边丢线行没有中线信息:mid 是 (2+185)/2 ≈ IMG_CENTER 的假居中票,
+           让它参与会把误差往 0 拉。这里是【排除】(权重=0),不是折扣,必须保留。 */
         if (ti->left_lost[r] && ti->right_lost[r])
         {
-            continue; /* 双边丢线行没有中线信息,不投假居中票 */
+            continue;
         }
-        if (ti->cross_filled[r])
-        {
-            w = (w * STEER_W_CROSS_FILL_PCT) / 100;
-        }
-        else if (ti->left_lost[r] || ti->right_lost[r])
-        {
-            w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
-        }
+        /* 曾有两个折扣: 单边行 ×STEER_W_SINGLE_EDGE_PCT(50)、
+           补线行 ×STEER_W_CROSS_FILL_PCT(70)。两个都已删除,理由相同:
+           折扣是给"值平均对、噪声大"用的工具,不是给"值可能整个错"用的。
+           - 单边行: 旧上游把丢线侧钳到画面边界,mid 连符号都可能反
+             (右弯远行算出 -13,真值 +36);打 5 折后是 -6.5,仍然反号——
+             折扣救不了错误的值。scan_*_border 改为返回上一行边线后
+             上游已算对(偏差几像素、符号正确),折扣变成纯惩罚。
+           - 补线行: 补对了就该满权重;补错了可能差几十像素,×70% 之后
+             还是错几十像素的 70%,也救不了。而且 cross_bottom_track_ok()
+             已经是决定"要不要补"的闸,再加折扣就是两个机制管同一个决定。
+           副作用: 弯里丢单边的恰好是远端行,恢复满权重后弯中误差变大,
+           Kp 可能需要下调。 */
         acc   += w * ((int16_t)ti->mid[r] - IMG_CENTER);
         w_sum += w;
     }
