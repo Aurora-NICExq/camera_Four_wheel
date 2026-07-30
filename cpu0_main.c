@@ -157,8 +157,8 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
       ips200_show_string(104, IMG_H + 52, "CRS");
       ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
-      ips200_show_string(0, IMG_H + 68, "CAP");
-      ips200_show_uint(32, IMG_H + 68, out.rows_cap, 4);
+      /* IMG_H+68 那一行原来显示 CAP(行数限速上限),随 rows_duty_cap 一并删除。
+         该行现在空着,要加就加 err_hold */
     }
     mt9v03x_finish_flag = 0;
   }

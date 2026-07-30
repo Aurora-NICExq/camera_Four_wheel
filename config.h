@@ -68,13 +68,15 @@
  * 单帧降幅恒 < 10000,该限幅分支永远走不到——已删,不要再加回来 */
 #define DUTY_SLEW_UP (120)     /* 每帧最大升占空比；50fps 下 0→2000 约 0.8s */
 
-/* 有效行数限速降级为纯安全网:只在视野真正劣化时兜底,不再与 Curve Duty
- * 抢速度话语权——速度由菜单 Duty 唯一决定。
- * ROW 掉到 20 以下(视野几乎丢失)才真正压到 Duty 之下 */
-#define ROWS_CAP_TABLE_LEN (3)
-#define ROWS_CAP_BINS {20, 35, 55}
-#define ROWS_CAP_DUTY {1500, 2200, 3400}
+/* 曾有 ROWS_CAP 行数限速表({20,35,55} → {1500,2200,3400}),已整表删除。
+ * 删除理由:低速档 Duty=2100 时 3400/2200 两档恒大于 Duty、永不生效,
+ * 唯一活跃行为是"ROW<20 压到 1500";而 ROW<8 已由下面的丢线保护接管,
+ * 独占区间只剩 ROW∈[8,19]。且它压低 duty 会经 control_duty_prev
+ * 反馈进 image_process 改变权重表混合系数 k,构成隐式增益调度。
+ * 现在图像劣化时的唯一保护 = 丢线保护(连续 10 帧 / severe 2 帧后停车),
+ * 速度全程只由菜单 Duty 决定。 */
 
+/* 丢线保护:图像劣化时的唯一兜底,二值杀开关——不减速,直接停车 */
 #define FAILSAFE_MIN_ROWS (8)
 #define FAILSAFE_MAX_BOTH_LOST_PCT (70)
 #define FAILSAFE_SEVERE_BOTH_LOST_PCT (90)
@@ -114,8 +116,8 @@
 
 /* 中速档:实测可用组 Kp=1.20 Kd=4.73 Duty=3200 WRef=6000。
  * 与低速档的差别只有基准速度和 W Ref(以及被迫抬高的 Kd)。
- * 注:Curve Duty / Str Duty 已于 c24f320 删除,速度全程只由菜单 Duty 决定,
- * 急弯降速只剩 rows_duty_cap 这一条图像质量安全网 */
+ * 注:Curve Duty / Str Duty 已于 c24f320 删除,ROWS_CAP 行数限速表随后也已删除,
+ * 速度全程只由菜单 Duty 决定,不存在任何自动降速 */
 #define PRESET_MID_KP           (KP)
 #define PRESET_MID_KD         (4.73f)
 #define PRESET_MID_D_ALPHA    (0.40f)

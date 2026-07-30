@@ -11,8 +11,7 @@ typedef struct
     uint16_t servo_pwm;
     uint16_t duty;
     int16_t  error_used;
-    uint16_t duty_target;
-    uint16_t rows_cap;   /* 本帧行数安全网上限,供调试显示:限速何时介入不再是隐形的 */
+    uint16_t duty_target; /* slew 之前的目标 = 菜单 Duty,用于区分"还在爬升"与"已到目标" */
 } control_out_t;
 
 /* control.c 的整定量。此前只在 menu.c / menu_config.c 里各自 extern,

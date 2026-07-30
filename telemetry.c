@@ -126,9 +126,10 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     if (s_need_header)
     {
         /* hold: 0=err 为实测,>0=盲区保持中(值为已保持帧数),见 image.h err_hold
-           tgt : 限幅/爬升前的目标占空比,dty 是 slew 之后的实际值
-           cap : 本帧 rows_duty_cap 上限,dty<tgt 时用它区分"限速介入"和"还在爬升" */
-        queue_push_line("# t_ms,err,hold,srv,dty,tgt,cap,row,lst,th,crs,kp,kd,wref\r\n");
+           tgt : slew 之前的目标占空比 = 菜单 Duty。dty<tgt 只可能是还在爬升,
+                 因为行数限速(ROWS_CAP)已删,不存在其他把 duty 压下去的机制。
+                 保留这一列的意义是让日志自带"当时命令的是多少速度" */
+        queue_push_line("# t_ms,err,hold,srv,dty,tgt,row,lst,th,crs,kp,kd,wref\r\n");
         s_need_header = 0u;
     }
 
@@ -138,14 +139,13 @@ void telemetry_update(uint32_t t_ms, uint32_t frame,
     }
 
     len = snprintf(buf, sizeof(buf),
-                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%.2f,%u\r\n",
+                   "%lu,%d,%u,%u,%u,%u,%u,%u,%u,%u,%.2f,%.2f,%u\r\n",
                    (unsigned long)t_ms,
                    (int)out->error_used,
                    (unsigned)ti->err_hold,
                    (unsigned)out->servo_pwm,
                    (unsigned)out->duty,
                    (unsigned)out->duty_target,
-                   (unsigned)out->rows_cap,
                    (unsigned)ti->valid_rows,
                    (unsigned)ti->both_lost_rows,
                    (unsigned)ti->threshold,
