@@ -1,3 +1,4 @@
+/* image.h - track_info_t + 最长白列巡线 */
 #ifndef IMAGE_H
 #define IMAGE_H
 
@@ -9,39 +10,31 @@ typedef struct
     uint8_t  left [IMG_H];
     uint8_t  right[IMG_H];
     uint8_t  mid  [IMG_H];
+    uint8_t  width[IMG_H];
     uint8_t  left_lost [IMG_H];
     uint8_t  right_lost[IMG_H];
 
     uint8_t  valid_rows;
     int16_t  error;
-
-
-    uint8_t  err_hold;
-
-
-    uint8_t  near_rows;
-    uint8_t  far_rows;
-    uint8_t  aim_rows;
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
     uint8_t  cross_filled[IMG_H];
     uint8_t  cross_valid;
+    uint8_t  cross_lo;
+    uint8_t  cross_hi;
+    uint8_t  inflect_row;
 } track_info_t;
 
 extern volatile int16_t image_threshold;
 extern volatile uint8_t image_cross_fill;
-extern volatile uint16_t steer_far_w_pct;
+extern volatile uint16_t steer_w_duty_ref;
 
-void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out);
+void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out);
 
-
-void image_debug_show(const track_info_t *ti);
-
-
-uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W]);
-uint8_t image_calib_last_th(void);
+/* 调试显示:二值图叠加边线/中线,纯显示不参与控制 */
+const uint8_t *image_debug_frame(const track_info_t *ti);
 
 uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe);
 
-#endif
+#endif /* IMAGE_H */

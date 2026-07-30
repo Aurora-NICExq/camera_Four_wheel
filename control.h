@@ -1,3 +1,4 @@
+/* control.h */
 #ifndef CONTROL_H
 #define CONTROL_H
 
@@ -11,17 +12,14 @@ typedef struct
     uint16_t duty;
     int16_t  error_used;
     uint16_t duty_target;
+    uint16_t rows_cap;   /* 本帧行数安全网上限,供调试显示:限速何时介入不再是隐形的 */
 } control_out_t;
-
-
-extern volatile float    steer_kp;
-extern volatile float    steer_kd;
-extern volatile float    steer_d_filt_alpha;
 
 extern volatile uint8_t  drive_armed;
 extern volatile uint8_t  drive_timed_out;
 extern volatile uint16_t drive_stop_time_s;
 extern volatile uint16_t drive_duty_base;
+extern volatile uint16_t control_duty_prev;
 
 void control_init(void);
 void control_reset(void);
@@ -29,4 +27,4 @@ void control_duty_reset(void);
 void control_update(const track_info_t *ti, control_out_t *out);
 uint16_t control_servo_clamp(int32_t servo_raw);
 
-#endif
+#endif /* CONTROL_H */

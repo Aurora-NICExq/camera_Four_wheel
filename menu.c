@@ -1,9 +1,8 @@
+/* menu.c - data-driven tune menu engine */
 #include "menu.h"
 #include "menu_port.h"
 #include "control.h"
-#include "image.h"
 #include "motor.h"
-#include "telemetry.h"
 
 extern volatile float    steer_kp;
 volatile uint8_t menu_fine_step = 0;
@@ -12,19 +11,20 @@ extern volatile float    steer_kd;
 extern volatile float    steer_d_filt_alpha;
 extern volatile int16_t  image_threshold;
 extern volatile uint8_t  image_cross_fill;
-extern volatile uint16_t steer_far_w_pct;
+extern volatile uint16_t steer_w_duty_ref;
 
-#define CONTENT_ROWS  (MENU_ROWS - 1)
-#define VALUE_COL     (18)
+#define CONTENT_ROWS  (MENU_ROWS - 1)          // 第 0 行为标题
+#define VALUE_COL     (18)                     // 竖屏 30 列：左侧标签，右侧数值
 #define VALUE_WIDTH   (MENU_COLS - VALUE_COL)
-#define KEY_STEP_MULT (10.0f)
-#define FINE_STEP_DIV  (0.1f)
-#define FINE_MIN_FLOAT (0.01f)
-#define FINE_MIN_INT   (1.0f)
+#define KEY_STEP_MULT (10.0f)                   // 长按自动重复步长倍率
+#define FINE_STEP_DIV  (0.1f)                   // Fine Step 开启时步长倍率
+#define FINE_MIN_FLOAT (0.01f)                  // 浮点最小步长(与 2 位小数显示精度对齐)
+#define FINE_MIN_INT   (1.0f)                   // 整型最小步长:再小会被取整吃掉,按键像失灵
 
 typedef enum { NAV_LIST, NAV_EDIT, NAV_PRESET } nav_state_e;
 
-
+/* 三档预设。一次写全每一项:未列出的项由 apply_defaults 兜底,
+   保证选中任一档进入的都是完整、可复现的状态 */
 #define PRESET_COUNT (3)
 
 typedef struct
@@ -35,7 +35,7 @@ typedef struct
     float    d_alpha;
     int16_t  threshold;
     uint8_t  cross_fill;
-    uint16_t far_w;
+    uint16_t w_ref;
     uint16_t duty;
     uint16_t stop_time;
 } preset_t;
@@ -45,29 +45,27 @@ static const preset_t s_presets[PRESET_COUNT] = {
       PRESET_LOW_KP, PRESET_LOW_KD,
       PRESET_LOW_D_ALPHA,
       PRESET_LOW_THRESHOLD, PRESET_LOW_CROSS_FILL,
-      PRESET_LOW_FAR_W, PRESET_LOW_DUTY, PRESET_LOW_STOP_TIME },
+      PRESET_LOW_W_REF, PRESET_LOW_DUTY, PRESET_LOW_STOP_TIME },
     { "Mid  (tested)",
       PRESET_MID_KP, PRESET_MID_KD,
       PRESET_MID_D_ALPHA,
       PRESET_MID_THRESHOLD, PRESET_MID_CROSS_FILL,
-      PRESET_MID_FAR_W, PRESET_MID_DUTY, PRESET_MID_STOP_TIME },
-    { "High (= Default)",
+      PRESET_MID_W_REF, PRESET_MID_DUTY, PRESET_MID_STOP_TIME },
+    { "High (TODO)",
       PRESET_HIGH_KP, PRESET_HIGH_KD,
       PRESET_HIGH_D_ALPHA,
       PRESET_HIGH_THRESHOLD, PRESET_HIGH_CROSS_FILL,
-      PRESET_HIGH_FAR_W, PRESET_HIGH_DUTY, PRESET_HIGH_STOP_TIME },
+      PRESET_HIGH_W_REF, PRESET_HIGH_DUTY, PRESET_HIGH_STOP_TIME },
 };
 
 static nav_state_e       s_nav;
 static uint8_t           s_camera_view;
-static uint8_t           s_calib_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
-static uint8_t           s_uart_test_mode;
-static uint8_t           s_preset_cursor;
-static uint8_t           s_cursor;
-static uint8_t           s_top;
-static float             s_edit_val;
+static uint8_t           s_preset_cursor;       // 预设子页面选中档位
+static uint8_t           s_cursor;              // 选中项索引
+static uint8_t           s_top;                 // 滚动窗口顶
+static float             s_edit_val;            // 编辑工作副本
 static const menu_item_t *s_edit_item;
 
 static int32_t round_f(float v) { return (int32_t)(v >= 0.0f ? v + 0.5f : v - 0.5f); }
@@ -121,7 +119,7 @@ static void draw_title(const char *txt)
 static void draw_title_edit(const char *name)
 {
     char t[MENU_COLS + 1];
-    const char *pfx = menu_fine_step ? "[F] " : "[E] ";
+    const char *pfx = menu_fine_step ? "[F] " : "[E] "; /* F 提示当前是细步进 */
     uint8_t i, j = 0;
     for (i = 0; i < MENU_COLS; i++) t[i] = ' ';
     t[MENU_COLS] = '\0';
@@ -208,11 +206,11 @@ static void item_enter(void)
     if (it->type == ITEM_ACTION) { if (it->action) it->action(); return; }
     if (it->type == ITEM_BOOL)
     {
-        item_set(it, (item_get(it) != 0.0f) ? 0.0f : 1.0f);
+        item_set(it, (item_get(it) != 0.0f) ? 0.0f : 1.0f);   // 原子 toggle + commit
         draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, false);
         return;
     }
-    s_nav = NAV_EDIT;
+    s_nav = NAV_EDIT;                                          // 数值 → 进入编辑（工作副本）
     s_edit_item = it;
     s_edit_val  = item_get(it);
     draw_title_edit(it->name);
@@ -224,7 +222,9 @@ static void edit_adjust(int8_t dir, uint8_t repeat)
     const menu_item_t *it = s_edit_item;
     float step = it->step;
 
-
+    /* Fine Step:短按细调、长按仍是原步长(0.1×10=1),一个开关覆盖四档精度。
+       下限按类型钳住——浮点不低于显示精度,整型不低于 1,
+       否则按键按下去数值不变,看起来像失灵 */
     if (menu_fine_step)
     {
         float lo = (it->type == ITEM_FLOAT) ? FINE_MIN_FLOAT : FINE_MIN_INT;
@@ -240,7 +240,7 @@ static void edit_adjust(int8_t dir, uint8_t repeat)
 
 static void edit_end(bool commit)
 {
-    if (commit && s_edit_item) item_set(s_edit_item, s_edit_val);
+    if (commit && s_edit_item) item_set(s_edit_item, s_edit_val);   // 单次写回
     s_nav = NAV_LIST;
     draw_title("TUNING");
     draw_item_row(s_cursor, (uint8_t)((s_cursor - s_top) + 1), true, false);
@@ -260,7 +260,9 @@ void menu_action_defaults(void)
     redraw_visible_values();
 }
 
-
+/* 一键切到实测验证过的参数组:先全量恢复默认(含 Armed=OFF),再逐项覆盖 */
+/* 应用一档预设:先全量恢复默认(含 Armed=OFF、Fine Step=OFF),再逐项覆盖,
+   保证进入的是完整可复现的状态,不受此前手动改动残留影响 */
 static void apply_preset(const preset_t *p)
 {
     apply_defaults();
@@ -269,12 +271,13 @@ static void apply_preset(const preset_t *p)
     steer_d_filt_alpha = p->d_alpha;
     image_threshold    = p->threshold;
     image_cross_fill   = p->cross_fill;
-    steer_far_w_pct    = p->far_w;
+    steer_w_duty_ref   = p->w_ref;
     drive_duty_base    = p->duty;
     drive_stop_time_s  = p->stop_time;
 }
 
-
+/* 预设子页面:名字缩进两格,选中行前加 "> ",
+   不像主列表那样覆盖掉名字前两个字符 */
 static void draw_preset_page(void)
 {
     char row[MENU_COLS + 1];
@@ -309,23 +312,12 @@ void menu_action_camera(void)
 {
     s_align_test_mode = 0;
     s_motor_test_mode = 0;
-    s_calib_view = 0;
     s_camera_view = 1;
-}
-
-void menu_action_cam_calib(void)
-{
-    s_align_test_mode = 0;
-    s_motor_test_mode = 0;
-    s_camera_view = 0;
-    s_calib_view = 1;
-    motor_stop();
 }
 
 void menu_action_align_test(void)
 {
     s_motor_test_mode = 0;
-    s_calib_view = 0;
     s_align_test_mode = 1;
     s_camera_view = 1;
     motor_stop();
@@ -343,31 +335,6 @@ void menu_action_motor_test(void)
     menu_port_draw_text(0, 4, "BACK: stop", MENU_STYLE_NORMAL);
 }
 
-
-void menu_action_uart_test(void)
-{
-    s_align_test_mode = 0;
-    s_motor_test_mode = 0;
-    s_camera_view     = 0;
-    s_calib_view      = 0;
-    s_uart_test_mode  = 1;
-    telemetry_reinit();
-    motor_stop();
-    menu_port_clear();
-    draw_title("UART TEST");
-    menu_port_draw_text(0, 2, "INIT", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 3, "TX",   MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 4, "SEQ",  MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 5, "DROP", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 6, "QLEN", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 7, "RTS",  MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 8, "BAUD", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 10, "INIT 1=auto baud OK", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 11, "TX must grow if RF TX", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 12, "BAUD -> set PC assistant", MENU_STYLE_NORMAL);
-    menu_port_draw_text(0, 14, "BACK: exit", MENU_STYLE_NORMAL);
-}
-
 void menu_action_reset(void)
 {
     control_reset();
@@ -380,11 +347,6 @@ uint8_t menu_camera_view(void)
     return s_camera_view;
 }
 
-uint8_t menu_calib_view(void)
-{
-    return s_calib_view;
-}
-
 uint8_t menu_align_test_mode(void)
 {
     return s_align_test_mode;
@@ -393,11 +355,6 @@ uint8_t menu_align_test_mode(void)
 uint8_t menu_motor_test_mode(void)
 {
     return s_motor_test_mode;
-}
-
-uint8_t menu_uart_test_mode(void)
-{
-    return s_uart_test_mode;
 }
 
 void menu_init(void)
@@ -421,43 +378,6 @@ static void menu_handle_key(const menu_key_event_t *ev)
             s_motor_test_mode = 0;
             motor_stop();
             draw_list_full();
-        }
-        return;
-    }
-
-    if (s_uart_test_mode)
-    {
-        if (ev->key == MENU_KEY_BACK)
-        {
-            s_uart_test_mode = 0;
-            draw_list_full();
-        }
-        return;
-    }
-
-    if (s_calib_view)
-    {
-        int16_t step = ev->is_repeat ? 10 : 2;
-        if (ev->key == MENU_KEY_BACK)
-        {
-            s_calib_view = 0;
-            draw_list_full();
-        }
-        else if (ev->key == MENU_KEY_UP || ev->key == MENU_KEY_DOWN)
-        {
-            int16_t th = image_threshold;
-            if (th <= 0)
-            {
-                th = (int16_t)image_calib_last_th();
-                if (th <= 0)
-                {
-                    th = FIXED_THRESHOLD;
-                }
-            }
-            th += (ev->key == MENU_KEY_UP) ? step : -step;
-            if (th < 1) th = 1;
-            if (th > 255) th = 255;
-            image_threshold = th;
         }
         return;
     }
@@ -488,7 +408,7 @@ static void menu_handle_key(const menu_key_event_t *ev)
             apply_preset(&s_presets[s_preset_cursor]);
             s_nav = NAV_LIST;
             draw_list_full();
-            draw_title(s_presets[s_preset_cursor].name);
+            draw_title(s_presets[s_preset_cursor].name); /* 标题回显应用了哪一档 */
         }
         else if (ev->key == MENU_KEY_BACK)
         {
@@ -504,7 +424,7 @@ static void menu_handle_key(const menu_key_event_t *ev)
         else if (ev->key == MENU_KEY_DOWN)  list_move(+1);
         else if (ev->key == MENU_KEY_ENTER) item_enter();
     }
-    else
+    else /* NAV_EDIT */
     {
         if      (ev->key == MENU_KEY_UP)    edit_adjust(+1, ev->is_repeat);
         else if (ev->key == MENU_KEY_DOWN)  edit_adjust(-1, ev->is_repeat);

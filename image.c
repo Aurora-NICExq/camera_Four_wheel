@@ -1,15 +1,22 @@
+/* image.c - 最长白列巡线 + 十字拐点补线(移植自 18 届 Camera.c)
+ * 取代原八邻域双边跟踪:列扫描找最长连续白列作为搜索基准,
+ * 再逐行向左右找边界;十字用上/下拐点配对后连线补齐 */
 #include <stdint.h>
 #include "config.h"
 #include "image.h"
-#include "zf_common_headfile.h"
 
 volatile int16_t  image_threshold  = 0;
-volatile uint8_t  image_cross_fill = 1;
-volatile uint16_t steer_far_w_pct  = STEER_FAR_W_PCT;
+volatile uint8_t  image_cross_fill = 1;   /* 菜单 Cross Fill */
+volatile uint16_t steer_w_duty_ref = STEER_W_DUTY_REF; /* 菜单 W Ref */
 
 #define IMG_WHITE   (0xFFu)
 #define IMG_BLACK   (0x00u)
-#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir)))
+#define TR_ROW(ir)  ((uint8_t)(IMG_H - 1u - (uint8_t)(ir))) /* 图像行 ir → 近车 track 行 */
+
+#define IMG_DBG_LEFT  (80u)   /* 调试叠加灰度:左边线 */
+#define IMG_DBG_RIGHT (160u)  /* 右边线 */
+#define IMG_DBG_MID   (220u)  /* 中线 */
+#define IMG_DBG_FILL  (120u)  /* 补线行的边线,与实测边线区分 */
 
 static uint8_t image_bin[IMG_H][IMG_W];
 static int16_t left_line[IMG_H];
@@ -24,7 +31,8 @@ static int16_t both_lost_time;
 static int16_t left_lost_flag[IMG_H];
 static int16_t right_lost_flag[IMG_H];
 
-static int16_t g_err_hold;
+static int16_t cross_flag;
+static int16_t g_err_hold;      /* 盲区误差保持 */
 static uint8_t g_hold_frames;
 static int16_t left_up_find;
 static int16_t left_down_find;
@@ -42,6 +50,9 @@ static void init_cross_meta(track_info_t *ti)
 {
     uint8_t r;
     ti->cross_valid = 0;
+    ti->cross_lo = 0;
+    ti->cross_hi = 0;
+    ti->inflect_row = 0xFF;
     for (r = 0; r < IMG_H; r++)
     {
         ti->cross_filled[r] = 0;
@@ -109,117 +120,12 @@ static void binarize(const uint8_t img[IMG_H][IMG_W], uint8_t th)
     }
 }
 
-static int clamp_scan_col(int v, int lo, int hi)
-{
-    if (v < lo) return lo;
-    if (v > hi) return hi;
-    return v;
-}
-
-static int16_t scan_right_border(int row, int seed)
-{
-    int j;
-    int lo;
-    int hi;
-    int max_j = IMG_W - 1 - 2;
-
-    seed = clamp_scan_col(seed, TH18_COL_MARGIN, max_j);
-    lo   = clamp_scan_col(seed - BORDER_SEARCH_RANGE, TH18_COL_MARGIN, max_j);
-    hi   = clamp_scan_col(seed + BORDER_SEARCH_RANGE, TH18_COL_MARGIN, max_j);
-
-    for (j = seed; j <= hi; j++)
-    {
-        if (image_bin[row][j] == IMG_WHITE &&
-            image_bin[row][j + 1] == IMG_BLACK &&
-            image_bin[row][j + 2] == IMG_BLACK)
-        {
-            right_lost_flag[row] = 0;
-            return (int16_t)j;
-        }
-    }
-    for (j = seed - 1; j >= lo; j--)
-    {
-        if (image_bin[row][j] == IMG_WHITE &&
-            image_bin[row][j + 1] == IMG_BLACK &&
-            image_bin[row][j + 2] == IMG_BLACK)
-        {
-            right_lost_flag[row] = 0;
-            return (int16_t)j;
-        }
-    }
-    right_lost_flag[row] = 1;
-    return (int16_t)seed;
-}
-
-static int16_t scan_left_border(int row, int seed)
-{
-    int j;
-    int lo;
-    int hi;
-    int min_j = 2;
-
-    seed = clamp_scan_col(seed, min_j, IMG_W - 1 - TH18_COL_MARGIN);
-    lo   = clamp_scan_col(seed - BORDER_SEARCH_RANGE, min_j, IMG_W - 1 - TH18_COL_MARGIN);
-    hi   = clamp_scan_col(seed + BORDER_SEARCH_RANGE, min_j, IMG_W - 1 - TH18_COL_MARGIN);
-
-    for (j = seed; j >= lo; j--)
-    {
-        if (image_bin[row][j] == IMG_WHITE &&
-            image_bin[row][j - 1] == IMG_BLACK &&
-            image_bin[row][j - 2] == IMG_BLACK)
-        {
-            left_lost_flag[row] = 0;
-            return (int16_t)j;
-        }
-    }
-    for (j = seed + 1; j <= hi; j++)
-    {
-        if (image_bin[row][j] == IMG_WHITE &&
-            image_bin[row][j - 1] == IMG_BLACK &&
-            image_bin[row][j - 2] == IMG_BLACK)
-        {
-            left_lost_flag[row] = 0;
-            return (int16_t)j;
-        }
-    }
-    left_lost_flag[row] = 1;
-    return (int16_t)seed;
-}
-
-static uint8_t cross_bottom_track_ok(void)
-{
-    int row;
-    int bottom_n    = 0;
-    int bottom_blost = 0;
-    int end_row     = IMG_H - 20;
-
-    if (end_row < IMG_H - search_stop_line)
-    {
-        end_row = IMG_H - search_stop_line;
-    }
-
-    for (row = IMG_H - 1; row >= end_row; row--)
-    {
-        bottom_n++;
-        if (left_lost_flag[row] && right_lost_flag[row])
-        {
-            bottom_blost++;
-        }
-    }
-    if (bottom_n <= 0)
-    {
-        return 0;
-    }
-
-    /* 弯底仍有边线:下半区双边丢线 <30% → 弯道,跳过十字补线 */
-    return (uint8_t)((bottom_blost * 100) < (bottom_n * 30));
-}
-
 static void longest_white_column(void)
 {
     int i, j;
     int start_column = TH18_COL_MARGIN;
     int end_column = IMG_W - TH18_COL_MARGIN;
+    int left_border = 0, right_border = 0;
 
     longest_white_left_len = 0;
     longest_white_left_col = 0;
@@ -286,26 +192,47 @@ static void longest_white_column(void)
         search_stop_line = IMG_H;
     }
 
+    for (i = IMG_H - 1; i >= IMG_H - search_stop_line; i--)
     {
-        int16_t lb;
-        int16_t rb;
-
-        i = IMG_H - 1;
-        rb = scan_right_border(i, (int)longest_white_right_col);
-        lb = scan_left_border(i, (int)longest_white_left_col);
-        right_line[i] = rb;
-        left_line[i]  = lb;
-
-        for (i = IMG_H - 2; i >= IMG_H - search_stop_line; i--)
+        for (j = longest_white_right_col; j <= IMG_W - 1 - 2; j++)
         {
-            rb = scan_right_border(i, (int)right_line[i + 1]);
-            lb = scan_left_border(i, (int)left_line[i + 1]);
-            right_line[i] = rb;
-            left_line[i]  = lb;
+            if (image_bin[i][j] == IMG_WHITE &&
+                image_bin[i][j + 1] == IMG_BLACK &&
+                image_bin[i][j + 2] == IMG_BLACK)
+            {
+                right_border = j;
+                right_lost_flag[i] = 0;
+                break;
+            }
+            else if (j >= IMG_W - 1 - 2)
+            {
+                right_border = j;
+                right_lost_flag[i] = 1;
+                break;
+            }
         }
+        for (j = longest_white_left_col; j >= 2; j--)
+        {
+            if (image_bin[i][j] == IMG_WHITE &&
+                image_bin[i][j - 1] == IMG_BLACK &&
+                image_bin[i][j - 2] == IMG_BLACK)
+            {
+                left_border = j;
+                left_lost_flag[i] = 0;
+                break;
+            }
+            else if (j <= 2)
+            {
+                left_border = j;
+                left_lost_flag[i] = 1;
+                break;
+            }
+        }
+        left_line[i] = (int16_t)left_border;
+        right_line[i] = (int16_t)right_border;
     }
 
-    for (i = IMG_H - 1; i >= IMG_H - search_stop_line; i--)
+    for (i = IMG_H - 1; i >= 0; i--)
     {
         if (left_lost_flag[i] && right_lost_flag[i])
         {
@@ -555,22 +482,24 @@ static void mark_cross_fill(int y1, int y2, track_info_t *ti)
             ti->cross_filled[tr] = 1;
         }
     }
+    if (ti->cross_lo == 0 && ti->cross_hi == 0)
+    {
+        ti->cross_lo = TR_ROW(a2);
+        ti->cross_hi = (uint8_t)(TR_ROW(a1) + 1u);
+    }
 }
 
 static void cross_detect(track_info_t *ti)
 {
     int down_search_start;
 
+    cross_flag = 0;
     left_up_find = 0;
     right_up_find = 0;
     left_down_find = 0;
     right_down_find = 0;
 
     if (both_lost_time < TH18_CROSS_BOTH_LOST_MIN)
-    {
-        return;
-    }
-    if (cross_bottom_track_ok())
     {
         return;
     }
@@ -585,6 +514,7 @@ static void cross_detect(track_info_t *ti)
         return;
     }
 
+    cross_flag = 1;
     down_search_start = (left_up_find > right_up_find) ? left_up_find : right_up_find;
     find_down_point(IMG_H - 5, down_search_start + 2);
 
@@ -625,6 +555,7 @@ static void cross_detect(track_info_t *ti)
     }
 
     ti->cross_valid = 1;
+    ti->inflect_row = TR_ROW(left_up_find);
 }
 
 static void image_filter(uint8_t bin[IMG_H][IMG_W])
@@ -651,179 +582,69 @@ static void image_filter(uint8_t bin[IMG_H][IMG_W])
     }
 }
 
-
+/* 导出到 track 坐标。注意:最长白列版的 track 行 0 = 最近车行,
+   与原八邻域版(从行 1 起写)不同,control.c 的 track_near_row 已同步为 0 */
 static void export_track(track_info_t *ti)
 {
-    int     ir;
-    uint8_t tr;
-    uint8_t rows;
-    uint8_t half_w;
-
+    int ir;
     for (ir = 0; ir < IMG_H; ir++)
     {
-        tr = TR_ROW(ir);
+        uint8_t tr = TR_ROW(ir);
         ti->left[tr]  = clamp_u8(left_line[ir], 0, IMG_W - 1);
         ti->right[tr] = clamp_u8(right_line[ir], 0, IMG_W - 1);
+        ti->mid[tr]   = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
+        ti->width[tr] = (uint8_t)(ti->right[tr] - ti->left[tr]);
         ti->left_lost[tr]  = (uint8_t)left_lost_flag[ir];
         ti->right_lost[tr] = (uint8_t)right_lost_flag[ir];
     }
-    rows = (search_stop_line > 0) ? (uint8_t)search_stop_line : 0u;
-    ti->valid_rows     = rows;
+    ti->valid_rows     = (search_stop_line > 0) ? (uint8_t)search_stop_line : 0u;
     ti->both_lost_rows = (uint8_t)both_lost_time;
-
-
-    half_w = TRACK_HALF_W_FALLBACK;
-    for (tr = 0; tr < rows; tr++)
-    {
-        if (!ti->left_lost[tr] && !ti->right_lost[tr] && ti->right[tr] > ti->left[tr])
-        {
-            half_w = (uint8_t)((uint16_t)(ti->right[tr] - ti->left[tr]) / 2u);
-            break;
-        }
-    }
-
-
-    for (tr = 0; tr < rows; tr++)
-    {
-        uint8_t ll = ti->left_lost[tr];
-        uint8_t rl = ti->right_lost[tr];
-
-        if (!ll && !rl)
-        {
-            ti->mid[tr] = (uint8_t)(((uint16_t)ti->left[tr] + (uint16_t)ti->right[tr]) / 2u);
-            if (ti->right[tr] > ti->left[tr])
-            {
-                half_w = (uint8_t)((uint16_t)(ti->right[tr] - ti->left[tr]) / 2u);
-            }
-        }
-        else if (!ll)
-        {
-            ti->mid[tr] = clamp_u8((int32_t)ti->left[tr] + (int32_t)half_w, 0, IMG_W - 1);
-        }
-        else if (!rl)
-        {
-            ti->mid[tr] = clamp_u8((int32_t)ti->right[tr] - (int32_t)half_w, 0, IMG_W - 1);
-        }
-        else
-        {
-            ti->mid[tr] = IMG_CENTER;
-        }
-    }
-    for (tr = rows; tr < IMG_H; tr++)
-    {
-        ti->mid[tr] = IMG_CENTER;
-    }
 }
 
-
-static uint8_t aim_window_avg(const track_info_t *ti, uint8_t hi, int32_t *err_out)
+static int16_t weighted_error(const track_info_t *ti, uint16_t duty_now)
 {
-    uint8_t aim;
-    uint8_t lo;
-    uint8_t hi_r;
-    uint8_t r;
-    int32_t acc = 0;
-    uint8_t n   = 0;
+    static const uint8_t w_low[STEER_W_BANDS]  = STEER_WEIGHTS_LOWSPEED;
+    static const uint8_t w_high[STEER_W_BANDS] = STEER_WEIGHTS_HIGHSPEED;
 
-    if (hi == 0u)
-    {
-        return 0;
-    }
+    uint16_t ref = steer_w_duty_ref;
+    uint32_t k;
+    int32_t  acc = 0;
+    int32_t  w_sum = 0;
+    uint8_t  r;
 
-    aim = (uint8_t)(((uint16_t)hi * (uint16_t)STEER_AIM_ROW_PCT) / 100u);
-    if (aim >= hi)
-    {
-        aim = (uint8_t)(hi - 1u);
-    }
+    if (ref == 0u) ref = DUTY_HARD_CAP; /* 除零兜底 */
+    k = ((uint32_t)duty_now * 256u) / ref;
+    if (k > 256u) k = 256u;
 
-    lo = (aim > STEER_AIM_WIN_HALF) ? (uint8_t)(aim - STEER_AIM_WIN_HALF) : 0u;
-    hi_r = (uint8_t)(aim + STEER_AIM_WIN_HALF);
-    if (hi_r >= hi)
+    for (r = 0; r < ti->valid_rows; r++)
     {
-        hi_r = (uint8_t)(hi - 1u);
-    }
+        uint8_t band = (uint8_t)(r / STEER_W_BAND_ROWS);
+        int32_t w;
 
-    for (r = lo; r <= hi_r; r++)
-    {
+        if (band >= STEER_W_BANDS) band = STEER_W_BANDS - 1;
+        w = (int32_t)w_low[band] * (int32_t)(256u - k)
+          + (int32_t)w_high[band] * (int32_t)k;
+
+        /* 丢线判定优先于补线判定:补线失败被夹到边界的行同时满足两者 */
         if (ti->left_lost[r] && ti->right_lost[r])
         {
-            continue;
+            continue; /* 双边丢线行没有中线信息,不投假居中票 */
         }
-        acc += (int32_t)ti->mid[r] - IMG_CENTER;
-        n++;
-    }
-
-    if (n > 0u)
-    {
-        *err_out = acc / (int32_t)n;
-    }
-    return n;
-}
-
-static int16_t two_band_error(track_info_t *ti)
-{
-    int32_t near_acc = 0;
-    int32_t far_acc  = 0;
-    uint8_t near_n   = 0;
-    uint8_t far_n    = 0;
-    uint8_t hi;
-    uint8_t split;
-    uint8_t r;
-    int32_t err;
-    int32_t fw;
-    int32_t aim_err = 0;
-    uint8_t aim_n;
-
-
-    hi = (ti->valid_rows < (uint8_t)STEER_FAR_ROW_HI)
-       ? ti->valid_rows : (uint8_t)STEER_FAR_ROW_HI;
-
-    /* 分段点按可见段的比例算,不用固定行号。
-       固定行号是个悬崖:valid_rows <= 45 时全部可见行都落进近段、far_n=0,
-       误差走 near_acc/near_n 退化分支,Far W% 读不到,急弯里前瞻不可调。
-       hi=90(满视野)时 split=45,与旧固定值相同 → 直道行为与标定不变。
-       hi<2 无法分两段,全归近段,交给下面 far_n==0 分支处理。 */
-    if (hi >= 2u)
-    {
-        split = (uint8_t)(((uint16_t)hi * (uint16_t)STEER_SPLIT_PCT) / 100u);
-        if (split == 0u) split = 1u;                   /* 近段至少 1 行 */
-        if (split >= hi) split = (uint8_t)(hi - 1u);   /* 远段至少 1 行 */
-    }
-    else
-    {
-        split = hi;
-    }
-
-    for (r = 0; r < hi; r++)
-    {
-        int32_t dev;
-
-        if (ti->left_lost[r] && ti->right_lost[r])
+        if (ti->cross_filled[r])
         {
-            continue;
+            w = (w * STEER_W_CROSS_FILL_PCT) / 100;
         }
-        dev = (int32_t)ti->mid[r] - IMG_CENTER;
-        if (r < split)
+        else if (ti->left_lost[r] || ti->right_lost[r])
         {
-            near_acc += dev;
-            near_n++;
+            w = (w * STEER_W_SINGLE_EDGE_PCT) / 100;
         }
-        else
-        {
-            far_acc += dev;
-            far_n++;
-        }
+        acc   += w * ((int16_t)ti->mid[r] - IMG_CENTER);
+        w_sum += w;
     }
 
-    ti->near_rows = near_n;
-    ti->far_rows  = far_n;
-    aim_n = aim_window_avg(ti, hi, &aim_err);
-    ti->aim_rows = aim_n;
-
-    if (near_n == 0u && far_n == 0u)
+    /* 盲区误差保持:有效权重塌陷时沿用进入盲区前的误差,超时按比例衰减回中 */
+    if (w_sum < ERR_HOLD_W_MIN)
     {
-
-
         if (g_hold_frames < ERR_HOLD_MAX_FRAMES)
         {
             g_hold_frames++;
@@ -834,33 +655,8 @@ static int16_t two_band_error(track_info_t *ti)
         }
         return g_err_hold;
     }
-
-    fw = (int32_t)steer_far_w_pct;
-    if (fw > 100) fw = 100;
-
-    if (far_n == 0u)
-    {
-        if (aim_n > 0u)
-        {
-            err = aim_err;
-        }
-        else
-        {
-            err = near_acc / (int32_t)near_n;
-        }
-    }
-    else if (near_n == 0u)
-    {
-        err = far_acc / (int32_t)far_n;
-    }
-    else
-    {
-        err = ((near_acc / (int32_t)near_n) * (100 - fw)
-             + (far_acc  / (int32_t)far_n)  * fw) / 100;
-    }
-
     g_hold_frames = 0;
-    g_err_hold = (int16_t)err;
+    g_err_hold = (int16_t)(acc / w_sum);
     return g_err_hold;
 }
 
@@ -884,108 +680,44 @@ uint8_t image_track_invalid(const track_info_t *ti, uint8_t *severe)
     }
 }
 
-static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t color)
-{
-    if (x0 == x1 && y0 == y1)
-    {
-        ips200_draw_point(x0, y0, color);
-    }
-    else
-    {
-        ips200_draw_line(x0, y0, x1, y1, color);
-    }
-}
-
-static uint8_t g_calib_last_th = 0;
-
-static uint8_t image_resolve_threshold(const uint8_t img[IMG_H][IMG_W])
-{
-    if (image_threshold > 0)
-    {
-        return (uint8_t)image_threshold;
-    }
-    return otsu_threshold(img);
-}
-
-uint8_t image_calib_last_th(void)
-{
-    return g_calib_last_th;
-}
-
-
-uint8_t image_calib_show(const uint8_t img[IMG_H][IMG_W])
-{
-    uint8_t th = image_resolve_threshold(img);
-
-    g_calib_last_th = th;
-    binarize(img, th);
-    ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
-    return th;
-}
-
-void image_debug_show(const track_info_t *ti)
+/* 调试显示:二值图上叠加左右边线与中线,就地绘制(image_bin 每帧重写),
+   纯显示不参与控制 */
+const uint8_t *image_debug_frame(const track_info_t *ti)
 {
     uint8_t tr;
-
-    ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W, IMG_H, 128);
-
-    for (tr = 1; tr < ti->valid_rows; tr++)
+    for (tr = 0; tr < ti->valid_rows && tr < IMG_H; tr++)
     {
-        uint16_t y0 = (uint16_t)(IMG_H - tr);
-        uint16_t y1 = (uint16_t)(IMG_H - 1u - tr);
-        uint8_t  filled0 = ti->cross_filled[tr - 1u];
-        uint8_t  filled1 = ti->cross_filled[tr];
-
-        if (!ti->left_lost[tr - 1u] && !ti->left_lost[tr])
+        uint8_t ir = (uint8_t)(IMG_H - 1u - tr);
+        uint8_t filled = ti->cross_filled[tr];
+        if (!ti->left_lost[tr])
         {
-            debug_draw_seg(ti->left[tr - 1u], y0, ti->left[tr], y1,
-                           (filled0 || filled1) ? RGB565_YELLOW : RGB565_BLUE);
+            image_bin[ir][ti->left[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_LEFT;
         }
-        if (!ti->right_lost[tr - 1u] && !ti->right_lost[tr])
+        if (!ti->right_lost[tr])
         {
-            debug_draw_seg(ti->right[tr - 1u], y0, ti->right[tr], y1,
-                           (filled0 || filled1) ? RGB565_YELLOW : RGB565_RED);
+            image_bin[ir][ti->right[tr]] = filled ? IMG_DBG_FILL : IMG_DBG_RIGHT;
         }
-        if (!ti->left_lost[tr - 1u] && !ti->right_lost[tr - 1u] &&
-            !ti->left_lost[tr] && !ti->right_lost[tr])
+        if (!ti->left_lost[tr] && !ti->right_lost[tr])
         {
-            debug_draw_seg(ti->mid[tr - 1u], y0, ti->mid[tr], y1, RGB565_GREEN);
+            image_bin[ir][ti->mid[tr]] = IMG_DBG_MID;
         }
     }
-
-    if (ti->valid_rows == 1u)
-    {
-        uint16_t y = (uint16_t)(IMG_H - 1u);
-        if (!ti->left_lost[0])
-        {
-            ips200_draw_point(ti->left[0], y,
-                              ti->cross_filled[0] ? RGB565_YELLOW : RGB565_BLUE);
-        }
-        if (!ti->right_lost[0])
-        {
-            ips200_draw_point(ti->right[0], y,
-                              ti->cross_filled[0] ? RGB565_YELLOW : RGB565_RED);
-        }
-        if (!ti->left_lost[0] && !ti->right_lost[0])
-        {
-            ips200_draw_point(ti->mid[0], y, RGB565_GREEN);
-        }
-    }
+    return (const uint8_t *)image_bin;
 }
 
-
-void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
+void image_process(const uint8_t img[IMG_H][IMG_W], uint16_t duty_now, track_info_t *out)
 {
     uint8_t th;
 
     init_cross_meta(out);
+    cross_flag = 0;
 
     th = (image_threshold > 0) ? (uint8_t)image_threshold : otsu_threshold(img);
     out->threshold = th;
 
     binarize(img, th);
-
-
+    /* 最长白列以"自底向上连续白像素数"为核心度量,单个黑噪点会截断整列并
+       大幅改变 search_stop_line,故保留 3x3 去噪(历史版本没有这一步) */
     image_filter(image_bin);
     longest_white_column();
     if (image_cross_fill)
@@ -994,8 +726,5 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out)
     }
     export_track(out);
 
-    out->error = two_band_error(out);
-
-
-    out->err_hold = g_hold_frames;
+    out->error = weighted_error(out, duty_now);
 }

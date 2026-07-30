@@ -1,7 +1,11 @@
+/* isr_config.h - ISR priority / vector config */
 #ifndef _isr_config_h
 #define _isr_config_h
 
+/* Priorities must be unique: 1-255 (255 highest, 0 disabled).
+ * INT_SERVICE: IfxSrc_Tos_cpu0 / cpu1 / dma; DMA priorities are 0-47. */
 
+/* PIT */
 #define CCU6_0_CH0_INT_SERVICE  IfxSrc_Tos_cpu0
 #define CCU6_0_CH0_ISR_PRIORITY 30
 #define CCU6_0_CH1_INT_SERVICE  IfxSrc_Tos_cpu0
@@ -11,7 +15,7 @@
 #define CCU6_1_CH1_INT_SERVICE  IfxSrc_Tos_cpu0
 #define CCU6_1_CH1_ISR_PRIORITY 33
 
-
+/* GPIO EXTI (paired channels share one ISR) */
 #define EXTI_CH0_CH4_INT_SERVICE IfxSrc_Tos_cpu0
 #define EXTI_CH0_CH4_INT_PRIO    40
 #define EXTI_CH1_CH5_INT_SERVICE IfxSrc_Tos_cpu0
@@ -21,11 +25,11 @@
 #define EXTI_CH3_CH7_INT_SERVICE IfxSrc_Tos_cpu0
 #define EXTI_CH3_CH7_INT_PRIO    43
 
-
+/* DMA */
 #define DMA_INT_SERVICE         IfxSrc_Tos_cpu0
 #define DMA_INT_PRIO            60
 
-
+/* UART */
 #define UART0_INT_SERVICE       IfxSrc_Tos_cpu0
 #define UART0_TX_INT_PRIO       11
 #define UART0_RX_INT_PRIO       10

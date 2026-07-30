@@ -1,3 +1,4 @@
+/* motor.c - servo/motor PWM HAL (4-PWM H-bridge) */
 #include "zf_common_headfile.h"
 #include "pins.h"
 #include "config.h"
