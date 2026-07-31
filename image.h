@@ -22,6 +22,10 @@ typedef struct
     uint8_t  cross_filled[IMG_H];
     uint8_t  cross_valid;
     uint8_t  fill_from_l;
+    uint8_t  break_row_l;
+    uint8_t  break_row_r;
+    uint8_t  break_method_l;
+    uint8_t  break_method_r;
 } track_info_t;
 
 extern volatile int16_t image_threshold;

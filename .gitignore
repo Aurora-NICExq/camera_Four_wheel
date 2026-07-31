@@ -9,5 +9,9 @@
 .agents/
 skills-lock.json
 
+# Host-side tools (Mac sim / replay, not versioned)
+cross_sim/
+run_cross_sim.command
+
 # Markdown docs (local notes, not versioned)
 *.md

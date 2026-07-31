@@ -24,7 +24,7 @@ int core0_main(void) {
   cpu_wait_event_ready();
 
   uint16_t fail_cnt = 0;
-  uint32_t armed_elapsed_us = 0;
+  uint32_t armed_elapsed_us = 0; //定时功能
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
@@ -37,9 +37,14 @@ int core0_main(void) {
       continue;
     }
 
-    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track);
+    //图像处理
+
+    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track); 
 
     {
+
+    //失控保护
+
       if (g_track.look_rows == 0u) {
         if (fail_cnt < FAILSAFE_FRAMES) {
           fail_cnt++;
@@ -55,13 +60,15 @@ int core0_main(void) {
 
     control_update(&g_track, &out);
 
+    //电机的处理
+
     if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
     } else if (menu_left_test_mode()) {
       motor_apply_left_only(MOTOR_TEST_DUTY);
     } else if (menu_align_test_mode()) {
       motor_apply_servo_only(out.servo_pwm);
-    } else if (drive_en && drive_armed) {
+    } else if (drive_en && drive_armed) {  //正常发车
       uint32_t now_us = hal_time_us();
       if (!armed_t0_set) {
         armed_t0_set = 1;
@@ -124,6 +131,15 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 84, image_fill_to_look, 1);
       ips200_show_string(104, IMG_H + 84, "FIL");
       ips200_show_uint(136, IMG_H + 84, g_track.fill_from_l, 3);
+      ips200_show_string(0, IMG_H + 100, "MTH");
+      ips200_show_uint(32, IMG_H + 100,
+                       (uint32_t)g_track.break_method_l * 10u +
+                           (uint32_t)g_track.break_method_r,
+                       2);
+      ips200_show_string(104, IMG_H + 100, "BKL");
+      ips200_show_uint(136, IMG_H + 100, g_track.break_row_l, 3);
+      ips200_show_string(0, IMG_H + 116, "BKR");
+      ips200_show_uint(32, IMG_H + 116, g_track.break_row_r, 3);
     }
     mt9v03x_finish_flag = 0;
   }

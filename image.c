@@ -6,7 +6,7 @@
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
 volatile uint8_t image_fill_to_look =
-    EIGHTN_CROSS_FILL_TO_LOOK_DEFAULT; // 补线和前瞻对齐
+    EIGHTN_CROSS_FILL_TO_LOOK_DEFAULT;                     // 补线和前瞻对齐
 volatile uint16_t steer_look_far = STEER_LOOK_FAR_DEFAULT; // 前瞻
 
 #define IMG_WHITE (0xFFu)
@@ -44,6 +44,10 @@ static void init_cross_meta(track_info_t *ti) {
   uint8_t r;
   ti->cross_valid = 0;
   ti->fill_from_l = 0;
+  ti->break_row_l = 0;
+  ti->break_row_r = 0;
+  ti->break_method_l = 0;
+  ti->break_method_r = 0;
   for (r = 0; r < IMG_H; r++) {
     ti->cross_filled[r] = 0;
   }
@@ -425,6 +429,8 @@ static void calculate_s_i(uint8_t start, uint8_t end, uint8_t *border,
     y_average = 0.0f;
   }
 
+  // 直线拟合
+
   *slope_rate = slope_calculate(start, end, border);
   *intercept = y_average - (*slope_rate) * x_average;
 }
@@ -472,65 +478,262 @@ static uint8_t fill_start_row(uint8_t break_row) {
   return from;
 }
 
-static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti) {
+// 十字补线 — 断点检测: 方向签名(直进) → 宽松签名(斜入) → 边界外跳(兜底)
+
+static uint8_t break_by_dir_pattern(const uint16_t *dirs,
+                                    const uint16_t points[][2],
+                                    uint16_t count) {
   uint16_t k;
+
+  for (k = 1; k + 7 < count; k++) {
+    if (dirs[k - 1] == 4 && dirs[k] == 4 && dirs[k + 3] == 6 &&
+        dirs[k + 5] == 6 && dirs[k + 7] == 6) {
+      return (uint8_t)points[k][1];
+    }
+  }
+  return 0;
+}
+
+static uint8_t dir_is_horiz(uint16_t d) {
+  return (uint8_t)(d == 0 || d == 3 || d == 4 || d == 5);
+}
+
+static uint8_t break_by_dir_flex(const uint16_t *dirs,
+                                 const uint16_t points[][2], uint16_t count) {
+  uint16_t k;
+
+  for (k = 2; k + 4 < count; k++) {
+    if (dir_is_horiz(dirs[k - 2]) && dir_is_horiz(dirs[k - 1]) &&
+        (dirs[k] == 6 || dirs[k] == 7) && dir_is_horiz(dirs[k + 1]) &&
+        dir_is_horiz(dirs[k + 2])) {
+      return (uint8_t)points[k][1];
+    }
+  }
+  return 0;
+}
+
+static uint8_t break_by_border_jump(const uint8_t *border, uint8_t outward_left,
+                                    uint8_t highest) {
+  int16_t r;
+  uint8_t best_row = 0;
+  int16_t best_score = 0;
+  int16_t stop = (int16_t)highest;
+
+  if (stop < (int16_t)(EIGHTN_CROSS_FILL_ROW_MIN + 8)) {
+    stop = (int16_t)(EIGHTN_CROSS_FILL_ROW_MIN + 8);
+  }
+
+  for (r = (int16_t)EIGHTN_START_ROW; r > stop; r--) {
+    int16_t dx = (int16_t)border[r] - (int16_t)border[r - 3];
+    int16_t score = outward_left ? dx : (int16_t)(-dx);
+    if (score > best_score) {
+      best_score = score;
+      best_row = (uint8_t)r;
+    }
+  }
+
+  if (best_score >= (int16_t)EIGHTN_CROSS_JUMP_THRESH) {
+    return best_row;
+  }
+  return 0;
+}
+
+static uint8_t width_stable_before(const uint8_t *border_l,
+                                   const uint8_t *border_r, uint8_t break_row) {
+  uint8_t lo = (uint8_t)(break_row + EIGHTN_CROSS_SLOPE_NEAR);
+  uint8_t hi = (uint8_t)(lo + EIGHTN_CROSS_WIDTH_WIN);
+  uint8_t r;
+  int16_t widths[16];
+  uint8_t n = 0;
+  int16_t avg;
+  int16_t sum = 0;
+
+  if (hi >= IMG_H) {
+    return 0;
+  }
+
+  for (r = lo; r < hi; r++) {
+    int16_t w = (int16_t)border_r[r] - (int16_t)border_l[r];
+    if (w < 8) {
+      return 0;
+    }
+    if (n < (uint8_t)(sizeof(widths) / sizeof(widths[0]))) {
+      widths[n] = w;
+      n++;
+    }
+  }
+
+  if (n < 4) {
+    return 0;
+  }
+
+  for (r = 0; r < n; r++) {
+    sum = (int16_t)(sum + widths[r]);
+  }
+  avg = (int16_t)(sum / (int16_t)n);
+
+  for (r = 0; r < n; r++) {
+    int16_t d = widths[r] - avg;
+    if (d < 0) {
+      d = (int16_t)(-d);
+    }
+    if (d > (int16_t)(avg / 4 + 3)) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static uint8_t cross_bottom_ok_legacy(uint8_t bin[IMG_H][IMG_W]) {
+  return (uint8_t)(bin[IMG_H - 1][EIGHTN_CROSS_CORNER_L] &&
+                   bin[IMG_H - 1][EIGHTN_CROSS_CORNER_R]);
+}
+
+static uint8_t cross_bottom_ok(uint8_t bin[IMG_H][IMG_W]) {
+  uint16_t c;
+  uint8_t left;
+  uint8_t right;
+  uint8_t center_track = 0;
+
+  if (cross_bottom_ok_legacy(bin)) {
+    return 1;
+  }
+
+  left = bin[IMG_H - 1][EIGHTN_CROSS_CORNER_L];
+  right = bin[IMG_H - 1][EIGHTN_CROSS_CORNER_R];
+  for (c = (uint16_t)(IMG_CENTER - 20); c < (uint16_t)(IMG_CENTER + 20); c++) {
+    if (bin[IMG_H - 1][c]) {
+      center_track = 1;
+      break;
+    }
+  }
+  return (uint8_t)((left || right) && center_track);
+}
+
+static void pick_break(const uint16_t *dirs, const uint16_t points[][2],
+                       uint16_t count, const uint8_t *border,
+                       uint8_t outward_left, uint8_t *row_out,
+                       uint8_t *method_out) {
+  uint8_t row;
+
+  row = break_by_dir_pattern(dirs, points, count);
+  if (row) {
+    *row_out = row;
+    *method_out = 1;
+    return;
+  }
+
+  row = break_by_dir_flex(dirs, points, count);
+  if (row) {
+    *row_out = row;
+    *method_out = 2;
+    return;
+  }
+
+  row = break_by_border_jump(border, outward_left, hightest_row);
+  if (row) {
+    *row_out = row;
+    *method_out = 3;
+    return;
+  }
+
+  *row_out = 0;
+  *method_out = 0;
+}
+
+static void apply_side_fill(uint8_t break_row, uint8_t left, uint8_t fill_from,
+                            track_info_t *ti) {
+  uint8_t *border = left ? l_border : r_border;
+  uint8_t start = (uint8_t)limit_a_b(
+      (int16_t)break_row - (int16_t)EIGHTN_CROSS_SLOPE_BACK, 0, IMG_H - 1);
+  uint8_t end = (uint8_t)limit_a_b(
+      (int16_t)break_row - (int16_t)EIGHTN_CROSS_SLOPE_NEAR, 0, IMG_H - 1);
+  float slope_rate;
+  float intercept;
   uint8_t i;
+
+  calculate_s_i(start, end, border, &slope_rate, &intercept);
+  intercept = (float)border[end] - slope_rate * (float)end;
+
+  for (i = fill_from; i < (uint8_t)(IMG_H - 1); i++) {
+    float fv = slope_rate * (float)i + intercept;
+    int16_t v = (int16_t)(fv >= 0.0f ? fv + 0.5f : fv - 0.5f);
+    border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
+    mark_cross_fill_rows(i, i, ti);
+  }
+}
+
+static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti) {
   uint8_t break_num_l = 0;
   uint8_t break_num_r = 0;
-  uint8_t start;
-  uint8_t end;
+  uint8_t method_l = 0;
+  uint8_t method_r = 0;
+  uint8_t fill_from_l;
+  uint8_t fill_from_r;
   uint8_t fill_from;
-  float slope_rate = 0.0f;
-  float intercept = 0.0f;
+  uint8_t both_pattern;
+  uint8_t row_tol;
+  int16_t row_diff;
 
-  for (k = 1; k < data_stastics_l; k++) {
-    if (dir_l[k - 1] == 4 && dir_l[k] == 4 && dir_l[k + 3] == 6 &&
-        dir_l[k + 5] == 6 && dir_l[k + 7] == 6) {
-      break_num_l = (uint8_t)points_l[k][1];
-      break;
-    }
-  }
+  pick_break(dir_l, points_l, data_stastics_l, l_border, 1, &break_num_l,
+             &method_l);
+  pick_break(dir_r, points_r, data_stastics_r, r_border, 0, &break_num_r,
+             &method_r);
 
-  for (k = 1; k < data_stastics_r; k++) {
-    if (dir_r[k - 1] == 4 && dir_r[k] == 4 && dir_r[k + 3] == 6 &&
-        dir_r[k + 5] == 6 && dir_r[k + 7] == 6) {
-      break_num_r = (uint8_t)points_r[k][1];
-      break;
-    }
-  }
+  ti->break_row_l = break_num_l;
+  ti->break_row_r = break_num_r;
+  ti->break_method_l = method_l;
+  ti->break_method_r = method_r;
 
   if (!break_num_l || !break_num_r) {
     return;
   }
 
-  if (!bin[IMG_H - 1][EIGHTN_CROSS_CORNER_L] ||
-      !bin[IMG_H - 1][EIGHTN_CROSS_CORNER_R]) {
+  // 拟合窗 [break-BACK, break-NEAR) 必须整段落在图像内
+
+  if (break_num_l <= EIGHTN_CROSS_SLOPE_BACK ||
+      break_num_r <= EIGHTN_CROSS_SLOPE_BACK) {
     return;
   }
 
-  start = (uint8_t)(break_num_l - EIGHTN_CROSS_SLOPE_BACK);
-  start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H);
-  end = (uint8_t)(break_num_l - EIGHTN_CROSS_SLOPE_NEAR);
-  calculate_s_i(start, end, l_border, &slope_rate, &intercept);
-  fill_from = fill_start_row(break_num_l);
+  both_pattern = (uint8_t)(method_l == 1 && method_r == 1);
+  row_tol = both_pattern ? EIGHTN_CROSS_BREAK_ROW_TOL_PATTERN
+                         : EIGHTN_CROSS_BREAK_ROW_TOL;
+  row_diff = (int16_t)break_num_l - (int16_t)break_num_r;
+  if (row_diff < 0) {
+    row_diff = (int16_t)(-row_diff);
+  }
+  if ((uint8_t)row_diff > row_tol) {
+    return;
+  }
+
+  if (!both_pattern) {
+    if (break_num_l <= (uint8_t)(hightest_row + 2) ||
+        break_num_r <= (uint8_t)(hightest_row + 2)) {
+      return;
+    }
+    if (!width_stable_before(l_border, r_border,
+                             break_num_l > break_num_r ? break_num_l
+                                                       : break_num_r)) {
+      return;
+    }
+  } else {
+    if (break_num_l <= hightest_row || break_num_r <= hightest_row) {
+      return;
+    }
+  }
+
+  if (!cross_bottom_ok(bin)) {
+    return;
+  }
+
+  fill_from_l = fill_start_row(break_num_l);
+  fill_from_r = fill_start_row(break_num_r);
+  fill_from = fill_from_l < fill_from_r ? fill_from_l : fill_from_r;
   ti->fill_from_l = fill_from;
-  for (i = fill_from; i < (uint8_t)(IMG_H - 1); i++) {
-    int16_t v = (int16_t)(slope_rate * (float)i + intercept);
-    l_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-    mark_cross_fill_rows(i, i, ti);
-  }
 
-  start = (uint8_t)(break_num_r - EIGHTN_CROSS_SLOPE_BACK);
-  start = (uint8_t)limit_a_b((int16_t)start, 0, IMG_H);
-  end = (uint8_t)(break_num_r - EIGHTN_CROSS_SLOPE_NEAR);
-  calculate_s_i(start, end, r_border, &slope_rate, &intercept);
-  fill_from = fill_start_row(break_num_r);
-  for (i = fill_from; i < (uint8_t)(IMG_H - 1); i++) {
-    int16_t v = (int16_t)(slope_rate * (float)i + intercept);
-    r_border[i] = (uint8_t)limit_a_b(v, EIGHTN_BORDER_MIN, EIGHTN_BORDER_MAX);
-    mark_cross_fill_rows(i, i, ti);
-  }
-
+  apply_side_fill(break_num_l, 1, fill_from, ti);
+  apply_side_fill(break_num_r, 0, fill_from, ti);
   ti->cross_valid = 1;
 }
 
@@ -575,7 +778,7 @@ static void export_track(track_info_t *ti, uint8_t hightest) {
 // 前瞻代码使用，超念是对的
 
 static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
-  const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
+  const uint8_t span = (uint8_t)STEER_LOOK_SPAN; // 取20行前瞻
   int32_t acc = 0;
   uint8_t n = 0;
   uint8_t r;
@@ -594,7 +797,7 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
 
     r--;
     tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + r);
-    if (ti->left_lost[tr] && ti->right_lost[tr]) {
+    if (ti->left_lost[tr] && ti->right_lost[tr]) { // 丢线不计入
       continue;
     }
     acc += (int16_t)ti->mid[tr] - IMG_CENTER;
@@ -612,7 +815,7 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
   }
   g_hold_frames = 0;
   g_err_hold = (int16_t)(acc / (int32_t)n);
-  return g_err_hold;
+  return g_err_hold; // 平均误差计算
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
