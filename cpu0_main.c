@@ -127,19 +127,6 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
       ips200_show_string(104, IMG_H + 68, "FAR");
       ips200_show_uint(136, IMG_H + 68, steer_look_far, 3);
-      ips200_show_string(0, IMG_H + 84, "F2L");
-      ips200_show_uint(32, IMG_H + 84, image_fill_to_look, 1);
-      ips200_show_string(104, IMG_H + 84, "FIL");
-      ips200_show_uint(136, IMG_H + 84, g_track.fill_from_l, 3);
-      ips200_show_string(0, IMG_H + 100, "MTH");
-      ips200_show_uint(32, IMG_H + 100,
-                       (uint32_t)g_track.break_method_l * 10u +
-                           (uint32_t)g_track.break_method_r,
-                       2);
-      ips200_show_string(104, IMG_H + 100, "BKL");
-      ips200_show_uint(136, IMG_H + 100, g_track.break_row_l, 3);
-      ips200_show_string(0, IMG_H + 116, "BKR");
-      ips200_show_uint(32, IMG_H + 116, g_track.break_row_r, 3);
     }
     mt9v03x_finish_flag = 0;
   }

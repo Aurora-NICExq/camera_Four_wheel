@@ -21,16 +21,13 @@ typedef struct
 
     uint8_t  cross_filled[IMG_H];
     uint8_t  cross_valid;
-    uint8_t  fill_from_l;
-    uint8_t  break_row_l;
-    uint8_t  break_row_r;
-    uint8_t  break_method_l;
-    uint8_t  break_method_r;
+    uint8_t  cross_lo;
+    uint8_t  cross_hi;
+    uint8_t  inflect_row;
 } track_info_t;
 
 extern volatile int16_t image_threshold;
 extern volatile uint8_t image_cross_fill;
-extern volatile uint8_t image_fill_to_look;
 extern volatile uint16_t steer_look_far;
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out);
