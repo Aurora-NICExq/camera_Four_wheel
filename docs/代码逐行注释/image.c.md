@@ -1,5 +1,22 @@
 # image.c 逐行注释
 
+> ## ⚠️ 已过期 — 本文描述的是**八邻域**版 `image.c`
+>
+> `feat/longest-white-column` 分支已把巡线整体换成**最长白列 + 十字补线**:
+> 删除 `get_start_point` / `search_l_r` / `get_left` / `get_right` /
+> `points_l·r` / `dir_l·r`,以及基于方向序列 + 最小二乘的 `cross_fill`;
+> 新增 `count_white_columns` / `find_longest_white_column` / `scan_borders`,
+> `cross_fill` 改为上下拐点 + 连线/外推。`config.h` 的 `EIGHTN_*` 更名为 `LWC_*`。
+>
+> **下文的行号、函数名、常量名全部作废**,只有以下几处仍然有效:
+> Otsu 阈值、`binarize`、`image_filter`、`image_draw_rectan`、
+> `TR_ROW()` 坐标映射、`look_ahead_error`、`image_debug_show` 的绘图逻辑。
+>
+> 提交前需按新 `image.c` 重新生成本文。
+
+---
+
+
 > 行号与源文件一致。
 
 ---

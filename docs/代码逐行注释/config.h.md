@@ -1,5 +1,24 @@
 # config.h 逐行注释
 
+> ## ⚠️ 部分过期 — 搜线相关宏已更名
+>
+> `feat/longest-white-column` 分支把 `EIGHTN_*` 整体更名为 `LWC_*`。
+>
+> **删除**:`EIGHTN_MAX_POINTS` / `EIGHTN_MEET_DIST` / `EIGHTN_EDGE_LOST_MARGIN` /
+> `EIGHTN_CROSS_SLOPE_BACK` / `EIGHTN_CROSS_SLOPE_NEAR` /
+> `EIGHTN_CROSS_CORNER_L·R`(底角门,判据与注释相反且屏蔽了整个接近段) /
+> `EIGHTN_CROSS_OPEN_ROW_MAX`(开口统计改为量真实开口区间,不再需要行上界)。
+>
+> **新增**:`LWC_SCAN_COL_MIN·MAX`(种子列搜索范围) /
+> `LWC_CROSS_SMOOTH` / `LWC_CROSS_JUMP`(拐点判据) /
+> `LWC_CROSS_EDGE_GUARD`(拐点探测跨度) / `LWC_CROSS_SLOPE_SPAN`(外推拟合基线) /
+> `LWC_CROSS_OPEN_ROWS_MIN`(开口最小行数)。
+>
+> 下文这些宏的段落作废,其余(前瞻/舵机/PD/预设)仍有效。
+
+---
+
+
 > 行号与源文件一致。
 
 本文件集中定义图像尺寸、前瞻误差、八邻域巡线、十字补线、舵机、PD 控制、占空比限速、按键与三档预设等全局常量。菜单与 `control.c` 通过 `extern volatile` 引用其中部分运行时可改项（Kp/Kd 等默认值由此处给出）。
