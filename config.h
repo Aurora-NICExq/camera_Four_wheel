@@ -17,15 +17,19 @@
 #define OTSU_THRESHOLD_MAX (200)
 
 // 前瞻相关参数
+//
+// 单行前瞻:菜单 Look Far 直接就是瞄准行(tr 坐标,越大越远;tr=1 是画面最下面一行)。
+// 该行双边丢线时向近端滑到第一条有效行,实际用的行回报在 track_info_t.aim_row。
+//
+// 原先是"从 Look Far 起向近端取 20 行求平均",已删除:这 20 行跨越的地面距离
+// 差了近一倍,像素/厘米标度不同,均匀平均等于隐含了一个偏向近端的加权。
+// 换算:旧 Look Far N 的等效瞄准行 = N - 10(20 行窗口形心),
+// 故 Low 76→66、Mid 79→69、默认 115→105,Kp/Kd 沿用不变。
 
-#define STEER_LOOK_SPAN (20)
-#define STEER_LOOK_FAR_DEFAULT (115)
+#define STEER_LOOK_FAR_DEFAULT (105)
 #define STEER_LOOK_FAR_MAX (IMG_H - 1)
-#if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)
-#error "STEER_LOOK_SPAN out of range"
-#endif
 #if (STEER_LOOK_FAR_DEFAULT > STEER_LOOK_FAR_MAX) ||                           \
-    (STEER_LOOK_FAR_DEFAULT <= STEER_LOOK_SPAN)
+    (STEER_LOOK_FAR_DEFAULT < 1)
 #error "STEER_LOOK_FAR_DEFAULT out of range"
 #endif
 #define ERR_HOLD_MAX_FRAMES (20)
@@ -83,7 +87,7 @@
 #define PRESET_LOW_D_ALPHA (0.40f)
 #define PRESET_LOW_THRESHOLD (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_LOOK_FAR (76)
+#define PRESET_LOW_LOOK_FAR (66)
 #define PRESET_LOW_DUTY (2600)
 #define PRESET_LOW_STOP_TIME (20)
 
@@ -92,7 +96,7 @@
 #define PRESET_MID_D_ALPHA (0.40f)
 #define PRESET_MID_THRESHOLD (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_LOOK_FAR (79)
+#define PRESET_MID_LOOK_FAR (69)
 #define PRESET_MID_DUTY (3000)
 #define PRESET_MID_STOP_TIME (30)
 

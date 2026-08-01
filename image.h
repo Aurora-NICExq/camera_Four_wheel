@@ -15,7 +15,7 @@ typedef struct
 
     int16_t  error;
     uint8_t  err_hold;
-    uint8_t  look_rows;
+    uint8_t  aim_row;        /* 本帧实际瞄准行(tr 坐标);0 = 无有效行 */
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 
