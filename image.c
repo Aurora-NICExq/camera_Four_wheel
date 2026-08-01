@@ -173,12 +173,14 @@ static void image_draw_rectan(uint8_t bin[IMG_H][IMG_W]) {
 /* ================= 参考库 Center_line_deal_plus ================= */
 
 static void center_line_deal_plus(uint8_t start_column, uint8_t end_column) {
-begin:
   uint8_t j;
   int16_t ir;
   int16_t row;
+  int16_t col;
   int left_border;
   int right_border;
+
+begin:
 
   for (ir = 0; ir < (int16_t)IMG_H - 1; ir++) {
     l_border[ir] = 0;
@@ -246,7 +248,7 @@ begin:
     l_lost[row] = 1;
     r_lost[row] = 1;
 
-    for (int16_t col = (int16_t)lwc_col; col >= 2; col--) {
+    for (col = (int16_t)lwc_col; col >= 2; col--) {
       if (image_bin[row][col] == IMG_WHITE &&
           image_bin[row][col - 1] == IMG_BLACK &&
           image_bin[row][col - 2] == IMG_BLACK) {
@@ -260,7 +262,7 @@ begin:
       }
     }
 
-    for (int16_t col = (int16_t)lwc_col; col <= (int16_t)(IMG_W - 3); col++) {
+    for (col = (int16_t)lwc_col; col <= (int16_t)(IMG_W - 3); col++) {
       if (image_bin[row][col] == IMG_WHITE &&
           image_bin[row][col + 1] == IMG_BLACK &&
           image_bin[row][col + 2] == IMG_BLACK) {
