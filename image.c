@@ -211,11 +211,8 @@ begin:
         break;
       }
     }
-    /* 参考库:底行两格都是赛道则整列作废(极性已适配) */
-    if (image_bin[IMG_H - 1][j] == IMG_WHITE &&
-        image_bin[IMG_H - 2][j] == IMG_WHITE) {
-      white_col[j] = 0;
-    }
+    /* 参考库 Scharr 边沿图:底行两格皆赛道则整列作废。OTSU 实心二值图近端
+     * 几乎每列底行都是赛道,该规则会把全部列清零→lwc_len=0→无中线,故不移植。 */
   }
 
   last_lwc_len = lwc_len;
@@ -233,7 +230,8 @@ begin:
   search_stop_line = lwc_len;
   stop_row = (uint8_t)(LWC_SCAN_START_ROW + 1u - search_stop_line);
 
-  if (my_abs((int)lwc_col - (int)last_lwc_col) >= LWC_COL_JUMP_MAX) {
+  if (last_lwc_len > 0u &&
+      my_abs((int)lwc_col - (int)last_lwc_col) >= LWC_COL_JUMP_MAX) {
     lwc_len = last_lwc_len;
     lwc_col = last_lwc_col;
     search_stop_line = lwc_len;
@@ -377,6 +375,8 @@ static void outer_analyse(void) {
     }
     if (right_lost_time >= 30u && left_lost_time >= 30u && both_lost_time >= 30u) {
       road_type = LWC_ROAD_CROSSING;
+    } else if (road_type == LWC_ROAD_CROSSING) {
+      road_type = LWC_ROAD_STRAIGHT;
     }
   }
 }
