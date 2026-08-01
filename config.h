@@ -13,22 +13,21 @@
 #define DRIVE_DT_NOMINAL_US (20000u)
 
 #define FIXED_THRESHOLD (128)
+#define OTSU_ROW_STEP (2)
+#define OTSU_COL_STEP (2)
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
 // 前瞻相关参数
 //
-// 从 Look Far(菜单)往近端滑,收满 STEER_LOOK_SPAN 个至少有一侧边线的行,均匀平均。
-// 丢线保护看 look_rows==0(窗内无有效行),触发后锁存,Armed OFF 复位。
+// 单行前瞻:菜单 Look Far 直接就是瞄准行(tr 坐标,越大越远;tr=1 是画面最下面一行)。
+// 该行双边丢线时向近端滑到第一条有效行,aim_row 回报实际行号;0 = 无有效行。
+// 丢线保护看 aim_row==0,帧数阈值菜单 Lost Fr。
 
-#define STEER_LOOK_SPAN (20)
 #define STEER_LOOK_FAR_DEFAULT (115)
 #define STEER_LOOK_FAR_MAX (IMG_H - 1)
-#if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)
-#error "STEER_LOOK_SPAN out of range"
-#endif
 #if (STEER_LOOK_FAR_DEFAULT > STEER_LOOK_FAR_MAX) ||                           \
-    (STEER_LOOK_FAR_DEFAULT <= STEER_LOOK_SPAN)
+    (STEER_LOOK_FAR_DEFAULT < 1)
 #error "STEER_LOOK_FAR_DEFAULT out of range"
 #endif
 #define ERR_HOLD_MAX_FRAMES (20)
@@ -99,23 +98,23 @@
 // 保存的三版参数
 
 // 这个他妈测一次就出来了，前瞻是对的
-#define PRESET_LOW_KP (1.39f)
+#define PRESET_LOW_KP (1.25f)
 #define PRESET_LOW_KD (1.20f)
 #define PRESET_LOW_D_ALPHA (0.40f)
 #define PRESET_LOW_THRESHOLD (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_LOOK_FAR (76)
-#define PRESET_LOW_DUTY (2600)
-#define PRESET_LOW_STOP_TIME (20)
+#define PRESET_LOW_LOOK_FAR (75)
+#define PRESET_LOW_DUTY (2500)
+#define PRESET_LOW_STOP_TIME (25)
 
-#define PRESET_MID_KP (1.55f)
-#define PRESET_MID_KD (1.15f)
+#define PRESET_MID_KP (1.65f)
+#define PRESET_MID_KD (1.10f)
 #define PRESET_MID_D_ALPHA (0.40f)
 #define PRESET_MID_THRESHOLD (0)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_LOOK_FAR (79)
-#define PRESET_MID_DUTY (3000)
-#define PRESET_MID_STOP_TIME (30)
+#define PRESET_MID_LOOK_FAR (80)
+#define PRESET_MID_DUTY (2600)
+#define PRESET_MID_STOP_TIME (25)
 
 #define PRESET_HIGH_KP (KP)
 #define PRESET_HIGH_KD (KD)

@@ -15,7 +15,7 @@ typedef struct
 
     int16_t  error;
     uint8_t  err_hold;
-    uint8_t  look_rows;      /* 前瞻窗内参与加权的有效行数;0 = 失控保护 */
+    uint8_t  aim_row;        /* 本帧瞄准行(tr);0 = 无有效行,丢线保护据此判定 */
     uint8_t  both_lost_rows;
     uint8_t  threshold;
 

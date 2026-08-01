@@ -68,8 +68,8 @@ static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W]) {
   uint32_t total = 0;
   uint16_t r, c, i;
 
-  for (r = 0; r < IMG_H; r++) {
-    for (c = 0; c < IMG_W; c++) {
+  for (r = 0; r < IMG_H; r += OTSU_ROW_STEP) {
+    for (c = 0; c < IMG_W; c += OTSU_COL_STEP) {
       hist[img[r][c]]++;
       total++;
     }
@@ -638,24 +638,20 @@ static void export_track(track_info_t *ti, uint8_t hightest) {
 
 // 前瞻代码使用，超念是对的
 
-/* 20 行滑窗均匀平均:从 Look Far 往近端滑,收满 span 个有效行。
-   *look_n_out = 参与行数,0 = 窗内无有效行。 */
-static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
-  const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
-  int32_t acc = 0;
-  uint8_t n = 0;
+/* 单行前瞻:Look Far 即瞄准行(tr);双边丢线则向近端滑,*aim_tr_out=0 表示无有效行。 */
+static int16_t look_ahead_error(const track_info_t *ti, uint8_t *aim_tr_out) {
   uint8_t r;
   uint16_t far = steer_look_far;
 
   if (far > (uint16_t)STEER_LOOK_FAR_MAX) {
     far = (uint16_t)STEER_LOOK_FAR_MAX;
   }
-  if (far <= (uint16_t)span) {
-    far = (uint16_t)span + 1u;
+  if (far < 1u) {
+    far = 1u;
   }
   r = (uint8_t)far;
 
-  while (r > 0u && n < span) {
+  while (r > 0u) {
     uint8_t tr;
 
     r--;
@@ -663,27 +659,24 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
     if (ti->left_lost[tr] && ti->right_lost[tr]) {
       continue;
     }
-    acc += (int16_t)ti->mid[tr] - IMG_CENTER;
-    n++;
-  }
-
-  *look_n_out = n;
-  if (n == 0u) {
-    if (g_hold_frames < ERR_HOLD_MAX_FRAMES) {
-      g_hold_frames++;
-    } else {
-      g_err_hold = (int16_t)((g_err_hold * 3) / 4);
-    }
+    *aim_tr_out = tr;
+    g_hold_frames = 0;
+    g_err_hold = (int16_t)ti->mid[tr] - IMG_CENTER;
     return g_err_hold;
   }
-  g_hold_frames = 0;
-  g_err_hold = (int16_t)(acc / (int32_t)n);
+
+  *aim_tr_out = 0u;
+  if (g_hold_frames < ERR_HOLD_MAX_FRAMES) {
+    g_hold_frames++;
+  } else {
+    g_err_hold = (int16_t)((g_err_hold * 3) / 4);
+  }
   return g_err_hold;
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
   uint8_t th;
-  uint8_t look_n;
+  uint8_t aim_tr;
 
   init_cross_meta(out);
   hightest_row = 0;
@@ -711,8 +704,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
     export_track(out, EIGHTN_START_ROW + 1u);
   }
 
-  out->error = look_ahead_error(out, &look_n);
-  out->look_rows = look_n;
+  out->error = look_ahead_error(out, &aim_tr);
+  out->aim_row = aim_tr;
   out->err_hold = g_hold_frames;
 }
 
