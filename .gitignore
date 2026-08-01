@@ -11,6 +11,7 @@ skills-lock.json
 
 # Markdown docs (local notes, not versioned)
 *.md
+!README.md
 !docs/代码逐行注释/
 !docs/代码逐行注释/**
 

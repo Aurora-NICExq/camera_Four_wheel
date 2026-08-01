@@ -25,9 +25,9 @@
 
 // 前瞻相关参数
 //
-// 单行前瞻:菜单 Look Far 直接就是瞄准行(tr 坐标,越大越远;tr=1 是画面最下面一行)。
-// 该行双边丢线时向近端滑到第一条有效行,aim_row 回报实际行号;0 = 无有效行。
-// 丢线保护看 aim_row==0,帧数阈值菜单 Lost Fr。
+// 单行前瞻:菜单 Look Far 直接就是瞄准行(tr 坐标,越大越远;tr=1
+// 是画面最下面一行)。 该行双边丢线时向近端滑到第一条有效行,aim_row
+// 回报实际行号;0 = 无有效行。 丢线保护看 aim_row==0,帧数阈值菜单 Lost Fr。
 
 #define STEER_LOOK_FAR_DEFAULT (115)
 #define STEER_LOOK_FAR_MAX (IMG_H - 1)
@@ -112,14 +112,14 @@
 #define PRESET_LOW_DUTY (2500)
 #define PRESET_LOW_STOP_TIME (25)
 
-#define PRESET_MID_KP (1.65f)
-#define PRESET_MID_KD (1.10f)
+#define PRESET_MID_KP (1.40f)
+#define PRESET_MID_KD (1.00f)
 #define PRESET_MID_D_ALPHA (0.40f)
-#define PRESET_MID_THRESHOLD (0)
+#define PRESET_MID_THRESHOLD (255)
 #define PRESET_MID_CROSS_FILL (1)
-#define PRESET_MID_LOOK_FAR (80)
-#define PRESET_MID_DUTY (2600)
-#define PRESET_MID_STOP_TIME (25)
+#define PRESET_MID_LOOK_FAR (75)
+#define PRESET_MID_DUTY (2700)
+#define PRESET_MID_STOP_TIME (20)
 
 #define PRESET_HIGH_KP (KP)
 #define PRESET_HIGH_KD (KD)
