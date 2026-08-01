@@ -1,10 +1,15 @@
-/* cpu0_main.c */
+/* cpu0_main.c — 实时链:摄像头 → 图像 → 控制 → 电机
+ *
+ * 按键/菜单/IPS200 屏幕全部在 CPU1(cpu1_main.c)。本核不许出现任何
+ * ips200_* 调用:屏幕归 CPU1 独占,两个核同时驱动 SPI 会撞。
+ * 共享数据和所有权规则见 shared.h。
+ */
 #include "config.h"
 #include "control.h"
 #include "image.h"
 #include "menu.h"
 #include "motor.h"
-#include "menu_port.h"
+#include "shared.h"
 #include "zf_common_headfile.h"
 
 #pragma section all "cpu0_dsram"
@@ -16,11 +21,10 @@ int core0_main(void) {
   debug_init();
 
   motor_hw_init();
-  menu_port_init();
   control_init();
-  menu_init();
 
   mt9v03x_init();
+  shared_cpu0_ready = 1; /* 时钟和相机就绪,放行 CPU1 去初始化屏幕 */
   cpu_wait_event_ready();
 
   uint16_t fail_cnt = 0;
@@ -29,17 +33,17 @@ int core0_main(void) {
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
   control_out_t out = {0};
+  uint32_t cpu1_beat_prev = shared_cpu1_beat;
+  uint32_t cpu1_beat_us = hal_time_us();
 
   while (TRUE) {
-    menu_task();
-
     if (!mt9v03x_finish_flag) {
       continue;
     }
 
     //图像处理
 
-    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track); 
+    image_process((const uint8_t (*)[IMG_W])mt9v03x_image, &g_track);
 
     {
 
@@ -57,6 +61,30 @@ int core0_main(void) {
       if (fail_cnt >= drive_failsafe_frames) {
         drive_en = 0;
       }
+    }
+
+    {
+
+    //CPU1 失联保护
+
+      /* 分核之后 CPU1 卡死不会再拖停主循环:屏幕定格、车照跑。
+         心跳超时按丢线同样的方式锁死,解除条件也一样(撤 Armed)。
+         注意 CPU1 画一帧灰度图要十几毫秒,阈值必须远大于它。 */
+      uint32_t beat = shared_cpu1_beat;
+      uint32_t now_us = hal_time_us();
+      if (beat != cpu1_beat_prev) {
+        cpu1_beat_prev = beat;
+        cpu1_beat_us = now_us;
+      } else if ((uint32_t)(now_us - cpu1_beat_us) > CPU1_ALIVE_TIMEOUT_US) {
+        drive_en = 0;
+      }
+    }
+
+    if (shared_ctrl_reset_req) {
+      /* 菜单 Reset:控制器状态和电机归 CPU0 独占,CPU1 只能请求 */
+      control_init();
+      motor_reset();
+      shared_ctrl_reset_req = 0;
     }
 
     control_update(&g_track, &out);
@@ -112,27 +140,9 @@ int core0_main(void) {
       drive_en = 1;
     }
 
-    if (menu_camera_view()) {
-      image_debug_show(&g_track);
-      ips200_show_string(0, IMG_H + 4, "ERR");
-      ips200_show_int(32, IMG_H + 4, out.error_used, 4);
-      ips200_show_string(104, IMG_H + 4, "SRV");
-      ips200_show_uint(136, IMG_H + 4, out.servo_pwm, 4);
-      ips200_show_string(0, IMG_H + 20, "AIM");
-      ips200_show_uint(32, IMG_H + 20, g_track.aim_row, 3);
-      ips200_show_string(104, IMG_H + 20, "DTY");
-      ips200_show_uint(136, IMG_H + 20, out.duty, 4);
-      ips200_show_string(0, IMG_H + 36, "LST");
-      ips200_show_uint(32, IMG_H + 36, g_track.both_lost_rows, 3);
-      ips200_show_string(0, IMG_H + 52, "TH");
-      ips200_show_uint(32, IMG_H + 52, g_track.threshold, 3);
-      ips200_show_string(104, IMG_H + 52, "CRS");
-      ips200_show_uint(136, IMG_H + 52, g_track.cross_valid, 1);
-      ips200_show_string(0, IMG_H + 68, "HLD");
-      ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
-      ips200_show_string(104, IMG_H + 68, "FAR");
-      ips200_show_uint(136, IMG_H + 68, steer_look_far, 3);
-    }
+    /* CPU1 只在 Camera 页要图;不要就是一次拷贝都不做 */
+    shared_serve_display(&g_track, &out, drive_en);
+
     mt9v03x_finish_flag = 0;
   }
 }

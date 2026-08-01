@@ -2,6 +2,7 @@
 #include "config.h"
 #include "zf_common_headfile.h"
 #include <stdint.h>
+#include <string.h>
 
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
@@ -718,13 +719,18 @@ static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
   }
 }
 
-void image_debug_show(const track_info_t *ti) {
+void image_copy_bin(uint8_t dst[IMG_H][IMG_W]) {
+  memcpy(dst, image_bin, sizeof(image_bin));
+}
+
+void image_debug_show(const uint8_t gray[IMG_H][IMG_W],
+                      const track_info_t *ti) {
   uint8_t tr;
   uint8_t tr0 = (uint8_t)TR_ROW(EIGHTN_START_ROW);
   uint8_t any = 0;
 
-  ips200_show_gray_image(0, 0, (const uint8 *)image_bin, IMG_W, IMG_H, IMG_W,
-                         IMG_H, 128);
+  ips200_show_gray_image(0, 0, (const uint8 *)gray, IMG_W, IMG_H, IMG_W, IMG_H,
+                         128);
 
   for (tr = (uint8_t)(tr0 + 1u); tr < IMG_H; tr++) {
     uint8_t prev = (uint8_t)(tr - 1u);
