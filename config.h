@@ -50,6 +50,22 @@
 #define EIGHTN_CROSS_OPEN_WIDTH (140)
 #define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8)
 
+/* 向量法拐点检测(取代原来的 dir 序列 4,4,...,6,6,6)。
+   沿爬线取 P0=pts[i]、P1=pts[i+K]、P2=pts[i+2K],P1 是候选角点,
+   判据全部作用在"进入向量 a=P1-P0"和"离开向量 b=P2-P1"的几何量上,
+   不依赖方向码在几个固定偏移上的精确取值,边线抖一个像素不会整帧漏检。
+   VEC_K    三点间隔(爬线点数)。太小对边缘噪声敏感,太大漏掉小角。预期 4~8。
+   VEC_FLAT K 步内 y 变化多少算"竖直":进入段须 |dy|<=FLAT(判定为水平),
+            离开段须 dy<=-FLAT(判定为向上)。K 步最多走 K 行,
+            故必须 FLAT < K,否则两个判据同时无解、永远检不出拐点。 */
+#define EIGHTN_CROSS_VEC_K (6)
+#define EIGHTN_CROSS_VEC_FLAT (4)
+#if (EIGHTN_CROSS_VEC_K < 2) ||                                                \
+    (EIGHTN_CROSS_VEC_FLAT >= EIGHTN_CROSS_VEC_K) ||                           \
+    (EIGHTN_CROSS_VEC_FLAT < 1)
+#error "EIGHTN_CROSS_VEC_FLAT must satisfy 1 <= FLAT < VEC_K"
+#endif
+
 // 舵机参数
 
 #define SERVO_PWM_HZ (50)
@@ -66,7 +82,9 @@
 #define DUTY_HARD_CAP (6000)
 #define DUTY_SLEW_UP (120)
 
-#define FAILSAFE_FRAMES (10) /* look_rows==0 连续帧数才锁停;摄像头偶发丢帧时留余量 */
+#define FAILSAFE_FRAMES_DEFAULT (10)
+#define FAILSAFE_FRAMES_MIN (1)
+#define FAILSAFE_FRAMES_MAX (60)
 
 #define MOTOR_PWM_FREQ (17000)
 

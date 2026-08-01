@@ -17,8 +17,9 @@ static uint8_t r_border[IMG_H];
 
 static uint16_t points_l[EIGHTN_MAX_POINTS][2];
 static uint16_t points_r[EIGHTN_MAX_POINTS][2];
+/* dir_l 只在 search_l_r 内部用于左右爬线同步;
+   dir_r 随向量法拐点检测一并删除(原来只有十字检测读它) */
 static uint16_t dir_l[EIGHTN_MAX_POINTS];
-static uint16_t dir_r[EIGHTN_MAX_POINTS];
 
 static uint8_t start_point_l[2];
 static uint8_t start_point_r[2];
@@ -309,7 +310,6 @@ static void search_l_r(uint16_t break_flag, uint8_t bin[IMG_H][IMG_W],
               IMG_WHITE) {
         temp_r[index_r][0] = search_filds_r[i][0];
         temp_r[index_r][1] = search_filds_r[i][1];
-        dir_r[r_data_statics - 1] = i;
         index_r++;
       }
 
@@ -456,6 +456,63 @@ static void mark_cross_fill_rows(uint8_t y_lo, uint8_t y_hi, track_info_t *ti) {
   }
 }
 
+/* 向量法找上拐点(车已进入十字时,画面里还看得见的那两个角)。
+
+   爬线从画面最下面沿人工黑框往上走,到十字横向开口的上沿转向横里,
+   走到赛道走廊边缘再转竖直往上。要找的就是第二个转折:
+     进入向量 a 几乎水平(沿开口上沿走) → 离开向量 b 明显向上(转进远端走廊)
+   第一个转折(黑框处由竖转横)进入段是竖直的,会被 |ay|<=FLAT 挡掉,
+   这一点比原来的 dir 序列判据更准 —— 旧判据抓的是黑框那个转折。
+
+   x_dir: 左边线横向段朝右传 +1,右边线横向段朝左传 -1。
+   返回角点所在图像行(>SLOPE_BACK),0 表示没找到。 */
+static uint8_t find_up_corner(const uint16_t pts[][2], uint16_t total,
+                              int8_t x_dir) {
+  const uint16_t k = (uint16_t)EIGHTN_CROSS_VEC_K;
+  const int16_t flat = (int16_t)EIGHTN_CROSS_VEC_FLAT;
+  uint16_t i;
+
+  for (i = 0; i + 2u * k < total; i++) {
+    int16_t ax = (int16_t)pts[i + k][0] - (int16_t)pts[i][0];
+    int16_t ay = (int16_t)pts[i + k][1] - (int16_t)pts[i][1];
+    int16_t bx = (int16_t)pts[i + 2u * k][0] - (int16_t)pts[i + k][0];
+    int16_t by = (int16_t)pts[i + 2u * k][1] - (int16_t)pts[i + k][1];
+
+    /* 角点太靠远端,下游的拟合窗口 [break-SLOPE_BACK, break) 放不下,
+       跳过继续找,而不是整帧放弃 */
+    if (pts[i + k][1] <= (uint16_t)EIGHTN_CROSS_SLOPE_BACK) {
+      continue;
+    }
+    /* 转角不超过 90 度:折返说明是噪声毛刺或爬线绕回来了 */
+    if ((int32_t)ax * bx + (int32_t)ay * by < 0) {
+      continue;
+    }
+    /* 进入段必须几乎水平 */
+    if (ay > flat || ay < -flat) {
+      continue;
+    }
+    /* 离开段必须明显向上(图像行号减小) */
+    if (by > -flat) {
+      continue;
+    }
+    /* 横向段的朝向,以及整体走向必须向上 */
+    if (x_dir > 0) {
+      if (ax <= 0 || (ax + bx) < 0) {
+        continue;
+      }
+    } else {
+      if (ax >= 0 || (ax + bx) > 0) {
+        continue;
+      }
+    }
+    if ((ay + by) > 0) {
+      continue;
+    }
+    return (uint8_t)pts[i + k][1]; /* 角点是中间那个点 */
+  }
+  return 0;
+}
+
 static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti) {
   uint16_t i;
   uint8_t start;
@@ -468,21 +525,9 @@ static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti) {
   cross_break_r = 0;
   cross_flag = 0;
 
-  for (i = 1; i + 7u < data_stastics_l; i++) {
-    if (dir_l[i - 1] == 4 && dir_l[i] == 4 && dir_l[i + 3] == 6 &&
-        dir_l[i + 5] == 6 && dir_l[i + 7] == 6) {
-      cross_break_l = (uint8_t)points_l[i][1];
-      break;
-    }
-  }
-
-  for (i = 1; i + 7u < data_stastics_r; i++) {
-    if (dir_r[i - 1] == 4 && dir_r[i] == 4 && dir_r[i + 3] == 6 &&
-        dir_r[i + 5] == 6 && dir_r[i + 7] == 6) {
-      cross_break_r = (uint8_t)points_r[i][1];
-      break;
-    }
-  }
+  /* 左边线的横向段朝右走,右边线的横向段朝左走 */
+  cross_break_l = find_up_corner(points_l, data_stastics_l, +1);
+  cross_break_r = find_up_corner(points_r, data_stastics_r, -1);
 
   if (!cross_break_l || !cross_break_r) {
     return;
@@ -500,8 +545,8 @@ static void cross_fill(uint8_t bin[IMG_H][IMG_W], track_info_t *ti) {
   }
 
   /* 真十字:左右上拐点行号接近,且拐点下方开口接近全宽。
-     弯道拐点同样能凑出 4,4,6,6,6 方向序列,但内侧边界仍在、宽度不足,
-     误补线会把弯道中线拉直、掏空转向误差 */
+     弯道的拐点同样能通过向量法的几何判据(横向进、竖直出),
+     但内侧边界仍在、宽度不足,误补线会把弯道中线拉直、掏空转向误差 */
   if (my_abs((int)cross_break_l - (int)cross_break_r) > EIGHTN_CROSS_BREAK_DROW) {
     return;
   }
