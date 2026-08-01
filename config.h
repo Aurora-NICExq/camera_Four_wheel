@@ -22,7 +22,7 @@
 // 加权:每行权重 = r(相对近端行号,越大越远),远端行权重大,补偿透视压缩。
 // 丢线保护看 look_rows==0(窗内无有效行),触发后锁存,Armed OFF 复位。
 
-#define STEER_LOOK_SPAN (20)
+#define STEER_LOOK_SPAN (10)
 #define STEER_LOOK_FAR_DEFAULT (115)
 #define STEER_LOOK_FAR_MAX (IMG_H - 1)
 #if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)

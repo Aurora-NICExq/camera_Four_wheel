@@ -593,7 +593,7 @@ static void export_track(track_info_t *ti, uint8_t hightest) {
 
 // 前瞻代码使用，超念是对的
 
-/* 20 行滑窗加权前瞻:从 Look Far 往近端滑,收满 span 个有效行。
+/* 10 行滑窗加权前瞻:从 Look Far 往近端滑,收满 span 个有效行。
    权重 = r(越大越远);*look_n_out = 参与行数,0 = 窗内无有效行。 */
 static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
   const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
