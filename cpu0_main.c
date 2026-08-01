@@ -51,8 +51,9 @@ int core0_main(void) {
         }
       } else {
         fail_cnt = 0;
-        drive_en = 1;
       }
+      /* 一旦触发就锁死:视野恢复也不再置回 drive_en,
+         避免车"磕一下 → 自己又冲出去"。只有撤销 Armed 才解除(见循环末尾) */
       if (fail_cnt >= FAILSAFE_FRAMES) {
         drive_en = 0;
       }
@@ -105,6 +106,10 @@ int core0_main(void) {
     if (!drive_armed) {
       armed_t0_set = 0;
       drive_timed_out = 0;
+      /* 丢线锁死只在撤销 Armed 时解除,和发车超时同一个粒度。
+         想改成"只有断电才解除",把下面两行删掉即可 */
+      fail_cnt = 0;
+      drive_en = 1;
     }
 
     if (menu_camera_view()) {
