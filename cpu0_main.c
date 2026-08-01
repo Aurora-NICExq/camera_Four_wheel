@@ -45,7 +45,7 @@ int core0_main(void) {
 
     //失控保护
 
-      if (g_track.aim_row == 0u) {
+      if (g_track.look_rows == 0u) {
         if (fail_cnt < FAILSAFE_FRAMES) {
           fail_cnt++;
         }
@@ -118,8 +118,8 @@ int core0_main(void) {
       ips200_show_int(32, IMG_H + 4, out.error_used, 4);
       ips200_show_string(104, IMG_H + 4, "SRV");
       ips200_show_uint(136, IMG_H + 4, out.servo_pwm, 4);
-      ips200_show_string(0, IMG_H + 20, "AIM");
-      ips200_show_uint(32, IMG_H + 20, g_track.aim_row, 3);
+      ips200_show_string(0, IMG_H + 20, "LOOK");
+      ips200_show_uint(32, IMG_H + 20, g_track.look_rows, 3);
       ips200_show_string(104, IMG_H + 20, "DTY");
       ips200_show_uint(136, IMG_H + 20, out.duty, 4);
       ips200_show_string(0, IMG_H + 36, "LST");

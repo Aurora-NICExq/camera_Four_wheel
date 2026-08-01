@@ -593,47 +593,54 @@ static void export_track(track_info_t *ti, uint8_t hightest) {
 
 // 前瞻代码使用，超念是对的
 
-/* 单行前瞻:菜单 Look Far 就是瞄准行(tr 坐标,越大越远)。
-   该行双边丢线时向近端滑,取第一条有效行;
-   *aim_tr_out 回报实际用的那一行,0 = 整列都没有有效行(失控保护据此判定)。 */
-static int16_t look_ahead_error(const track_info_t *ti, uint8_t *aim_tr_out) {
+/* 20 行滑窗加权前瞻:从 Look Far 往近端滑,收满 span 个有效行。
+   权重 = r(越大越远);*look_n_out = 参与行数,0 = 窗内无有效行。 */
+static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
+  const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
+  int32_t acc = 0;
+  int32_t w_sum = 0;
+  uint8_t n = 0;
   uint8_t r;
   uint16_t far = steer_look_far;
 
   if (far > (uint16_t)STEER_LOOK_FAR_MAX) {
     far = (uint16_t)STEER_LOOK_FAR_MAX;
   }
-  if (far < 1u) {
-    far = 1u;
+  if (far <= (uint16_t)span) {
+    far = (uint16_t)span + 1u;
   }
   r = (uint8_t)far;
 
-  while (r > 0u) {
+  while (r > 0u && n < span) {
     uint8_t tr;
 
     r--;
     tr = (uint8_t)(TR_ROW(EIGHTN_START_ROW) + r);
-    if (ti->left_lost[tr] && ti->right_lost[tr]) { // 丢线就往近端滑一行
+    if (ti->left_lost[tr] && ti->right_lost[tr]) {
       continue;
     }
-    *aim_tr_out = tr;
-    g_hold_frames = 0;
-    g_err_hold = (int16_t)ti->mid[tr] - IMG_CENTER;
-    return g_err_hold;
+    acc += (int32_t)r * (int16_t)(ti->mid[tr] - IMG_CENTER);
+    w_sum += (int32_t)r;
+    n++;
   }
 
-  *aim_tr_out = 0u;
-  if (g_hold_frames < ERR_HOLD_MAX_FRAMES) {
-    g_hold_frames++;
-  } else {
-    g_err_hold = (int16_t)((g_err_hold * 3) / 4);
+  *look_n_out = n;
+  if (n == 0u || w_sum == 0) {
+    if (g_hold_frames < ERR_HOLD_MAX_FRAMES) {
+      g_hold_frames++;
+    } else {
+      g_err_hold = (int16_t)((g_err_hold * 3) / 4);
+    }
+    return g_err_hold;
   }
+  g_hold_frames = 0;
+  g_err_hold = (int16_t)(acc / w_sum);
   return g_err_hold;
 }
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
   uint8_t th;
-  uint8_t aim_tr;
+  uint8_t look_n;
 
   init_cross_meta(out);
   hightest_row = 0;
@@ -661,8 +668,8 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
     export_track(out, EIGHTN_START_ROW + 1u);
   }
 
-  out->error = look_ahead_error(out, &aim_tr);
-  out->aim_row = aim_tr;
+  out->error = look_ahead_error(out, &look_n);
+  out->look_rows = look_n;
   out->err_hold = g_hold_frames;
 }
 
