@@ -16,12 +16,11 @@
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 
-//前瞻相关参数
+// 前瞻相关参数
 
 #define STEER_LOOK_SPAN (20)
 #define STEER_LOOK_FAR_DEFAULT (115)
-#define STEER_LOOK_FAR_MAX                                                     \
-  (IMG_H - 1)
+#define STEER_LOOK_FAR_MAX (IMG_H - 1)
 #if (STEER_LOOK_SPAN < 1) || (STEER_LOOK_SPAN >= STEER_LOOK_FAR_MAX)
 #error "STEER_LOOK_SPAN out of range"
 #endif
@@ -48,7 +47,7 @@
 #define EIGHTN_CROSS_OPEN_WIDTH (140)
 #define EIGHTN_CROSS_OPEN_ROW_MAX (IMG_H - 8)
 
-//舵机参数
+// 舵机参数
 
 #define SERVO_PWM_HZ (50)
 #define SERVO_CENTER (705)
@@ -76,17 +75,17 @@
 
 #define MOTOR_TEST_DUTY (2000)
 
-//保存的三版参数
+// 保存的三版参数
 
 // 这个他妈测一次就出来了，前瞻是对的
-#define PRESET_LOW_KP (1.50f)
+#define PRESET_LOW_KP (1.39f)
 #define PRESET_LOW_KD (1.20f)
 #define PRESET_LOW_D_ALPHA (0.40f)
 #define PRESET_LOW_THRESHOLD (0)
 #define PRESET_LOW_CROSS_FILL (1)
-#define PRESET_LOW_LOOK_FAR (71)
-#define PRESET_LOW_DUTY (2700)
-#define PRESET_LOW_STOP_TIME (30)
+#define PRESET_LOW_LOOK_FAR (76)
+#define PRESET_LOW_DUTY (2600)
+#define PRESET_LOW_STOP_TIME (20)
 
 #define PRESET_MID_KP (1.55f)
 #define PRESET_MID_KD (1.15f)
