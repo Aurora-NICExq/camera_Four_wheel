@@ -593,12 +593,11 @@ static void export_track(track_info_t *ti, uint8_t hightest) {
 
 // 前瞻代码使用，超念是对的
 
-/* 10 行滑窗加权前瞻:从 Look Far 往近端滑,收满 span 个有效行。
-   权重 = r(越大越远);*look_n_out = 参与行数,0 = 窗内无有效行。 */
+/* 20 行滑窗均匀平均:从 Look Far 往近端滑,收满 span 个有效行。
+   *look_n_out = 参与行数,0 = 窗内无有效行。 */
 static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
   const uint8_t span = (uint8_t)STEER_LOOK_SPAN;
   int32_t acc = 0;
-  int32_t w_sum = 0;
   uint8_t n = 0;
   uint8_t r;
   uint16_t far = steer_look_far;
@@ -619,13 +618,12 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
     if (ti->left_lost[tr] && ti->right_lost[tr]) {
       continue;
     }
-    acc += (int32_t)r * (int16_t)(ti->mid[tr] - IMG_CENTER);
-    w_sum += (int32_t)r;
+    acc += (int16_t)ti->mid[tr] - IMG_CENTER;
     n++;
   }
 
   *look_n_out = n;
-  if (n == 0u || w_sum == 0) {
+  if (n == 0u) {
     if (g_hold_frames < ERR_HOLD_MAX_FRAMES) {
       g_hold_frames++;
     } else {
@@ -634,7 +632,7 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *look_n_out) {
     return g_err_hold;
   }
   g_hold_frames = 0;
-  g_err_hold = (int16_t)(acc / w_sum);
+  g_err_hold = (int16_t)(acc / (int32_t)n);
   return g_err_hold;
 }
 
