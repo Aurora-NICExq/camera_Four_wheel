@@ -13,8 +13,6 @@
 #define DRIVE_DT_NOMINAL_US (20000u)
 
 #define FIXED_THRESHOLD (128)
-#define OTSU_ROW_STEP (2)
-#define OTSU_COL_STEP (2)
 #define OTSU_THRESHOLD_MIN (40)
 #define OTSU_THRESHOLD_MAX (200)
 

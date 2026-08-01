@@ -67,10 +67,8 @@ static uint8_t otsu_threshold(const uint8_t img[IMG_H][IMG_W]) {
   uint32_t total = 0;
   uint16_t r, c, i;
 
-  // 间隔采样
-
-  for (r = 0; r < IMG_H; r += OTSU_ROW_STEP) {
-    for (c = 0; c < IMG_W; c += OTSU_COL_STEP) {
+  for (r = 0; r < IMG_H; r++) {
+    for (c = 0; c < IMG_W; c++) {
       hist[img[r][c]]++;
       total++;
     }
