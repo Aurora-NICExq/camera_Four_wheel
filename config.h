@@ -66,7 +66,7 @@
 #define DUTY_HARD_CAP (6000)
 #define DUTY_SLEW_UP (120)
 
-#define FAILSAFE_FRAMES (2)
+#define FAILSAFE_FRAMES (10) /* look_rows==0 连续帧数才锁停;摄像头偶发丢帧时留余量 */
 
 #define MOTOR_PWM_FREQ (17000)
 
