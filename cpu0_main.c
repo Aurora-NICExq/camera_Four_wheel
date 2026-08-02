@@ -46,7 +46,7 @@ int core0_main(void) {
     //失控保护
 
       if (g_track.aim_row == 0u) {
-        if (fail_cnt < drive_failsafe_frames) {
+        if (fail_cnt < FAILSAFE_FRAMES) {
           fail_cnt++;
         }
       } else {
@@ -54,7 +54,7 @@ int core0_main(void) {
       }
       /* 一旦触发就锁死:视野恢复也不再置回 drive_en,
          避免车"磕一下 → 自己又冲出去"。只有撤销 Armed 才解除(见循环末尾) */
-      if (fail_cnt >= drive_failsafe_frames) {
+      if (fail_cnt >= FAILSAFE_FRAMES) {
         drive_en = 0;
       }
     }

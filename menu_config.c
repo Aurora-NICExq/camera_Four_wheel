@@ -11,7 +11,6 @@ extern volatile uint16_t steer_look_far;
 extern volatile uint8_t  drive_armed;
 extern volatile uint16_t drive_stop_time_s;
 extern volatile uint16_t drive_duty_base;
-extern volatile uint16_t drive_failsafe_frames;
 
 const menu_item_t menu_items[] = {
     MENU_BOOL("Armed",      drive_armed,        0),
@@ -24,7 +23,6 @@ const menu_item_t menu_items[] = {
     MENU_U16("Look Far",     steer_look_far,     1, STEER_LOOK_FAR_MAX, 5, STEER_LOOK_FAR_DEFAULT),
     MENU_U16("Duty",        drive_duty_base,    0,    DUTY_HARD_CAP, 100, STRAIGHT_DUTY),
     MENU_U16("Stop Time",   drive_stop_time_s,  1,    600,   1,     DRIVE_ARMED_TIMEOUT_S),
-    MENU_U16("Lost Fr",     drive_failsafe_frames, FAILSAFE_FRAMES_MIN, FAILSAFE_FRAMES_MAX, 1, FAILSAFE_FRAMES_DEFAULT),
     MENU_ACTION("Race Preset",  menu_action_race_preset),
     MENU_ACTION("Reset",        menu_action_reset),
     MENU_ACTION("Camera",       menu_action_camera),

@@ -22,7 +22,7 @@
 //
 // 单行前瞻:菜单 Look Far 直接就是瞄准行(tr 坐标,越大越远;tr=1 是画面最下面一行)。
 // 该行双边丢线时向近端滑到第一条有效行,aim_row 回报实际行号;0 = 无有效行。
-// 丢线保护看 aim_row==0,帧数阈值菜单 Lost Fr。
+// 丢线保护看 aim_row==0,帧数阈值 FAILSAFE_FRAMES(写死,见 3bc4cc6)。
 
 #define STEER_LOOK_FAR_DEFAULT (115)
 #define STEER_LOOK_FAR_MAX (IMG_H - 1)
@@ -81,9 +81,7 @@
 #define DUTY_HARD_CAP (6000)
 #define DUTY_SLEW_UP (120)
 
-#define FAILSAFE_FRAMES_DEFAULT (10)
-#define FAILSAFE_FRAMES_MIN (1)
-#define FAILSAFE_FRAMES_MAX (60)
+#define FAILSAFE_FRAMES (2)
 
 #define MOTOR_PWM_FREQ (17000)
 
