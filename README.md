@@ -1,12 +1,16 @@
 # test_CarRun
 
-TC264 双核智能车摄像头巡线固件。根目录为**唯一源码副本**——应用逻辑与逐飞库工程分离，在 Mac 上改码、push 后在烧录机 pull，用 ADS (Tasking) 编译烧录。
+TC264 智能车摄像头巡线固件。根目录为**唯一源码副本**——应用逻辑与逐飞库工程分离，在 Mac 上改码、push 后在烧录机 pull，用 ADS (Tasking) 编译烧录。
+
+## 项目状态
+
+**2026 年 8 月 3 日进行最后一次推送。** 队友已全部退出，我也不打算再投入任何时间在智能车上。此后本仓库不再维护，当前代码即为最终交付版本。
 
 ## 硬件
 
 | 组件 | 型号 / 说明 |
 |------|-------------|
-| MCU | Infineon AURIX TC264（双核 TriCore） |
+| MCU | Infineon AURIX TC264（双核 TriCore，当前固件单核运行） |
 | 摄像头 | MT9V034，188×120 灰度 |
 | 屏幕 | IPS200 SPI 彩屏（调试画面） |
 | 执行器 | 舵机转向 + 双轮 PWM 驱动 |
@@ -21,23 +25,9 @@ MT9V034 帧 → image.c（二值化 + 边线 + 误差）
            → motor.c（舵机 / 电机 PWM）
 ```
 
+菜单、按键、IPS200 刷屏与上述控制链同在 CPU0 主循环中串行执行（[`cpu0_main.c`](cpu0_main.c)）。CPU1 仅占位以满足双核工程模板（[`cpu1_main.c`](cpu1_main.c)）。
+
 在线调参由 `menu.c` 提供，菜单项与变量绑定在 [`menu_config.c`](menu_config.c)。
-
-## 双核分工
-
-| 核 | 职责 | 入口 |
-|----|------|------|
-| CPU0 (1.6P) | 相机 DMA、图像处理、控制、电机 | [`cpu0_main.c`](cpu0_main.c) |
-| CPU1 (1.6E) | 按键、菜单、IPS200 刷屏 | [`cpu1_main.c`](cpu1_main.c) |
-
-跨核共享数据与所有权规则见 [`shared.h`](shared.h) 顶部注释（这份注释会随代码烧录，是唯一会到车上的架构说明）。
-
-要点：
-
-- 调参量（Kp/Kd、Threshold、Look Far 等）：CPU1 写，CPU0 读
-- 电机与控制状态：CPU0 独占；CPU1 复位通过 `shared_ctrl_reset_req`
-- 调试帧 `shared_disp`：单槽邮箱，CPU0 填、CPU1 画（仅在 Camera 页请求，避免每帧 22.5 KB 拷贝）
-- CPU1 心跳超时（`CPU1_ALIVE_TIMEOUT_US`）触发与丢线相同的驱动锁死
 
 ## 巡线算法（`image.c`）
 
@@ -48,16 +38,20 @@ MT9V034 帧 → image.c（二值化 + 边线 + 误差）
 
 常量与默认值在 [`config.h`](config.h)；可调运行时参数通过菜单修改。
 
+## 数据记录（`telemetry.c`）
+
+Armed 后每帧将控制量写入 RAM（16 字节/帧，默认缓冲约 61 s @50 fps）。跑完停车后，菜单 **Dump Log** 经调试串口一次性导出 CSV，供 Excel / MATLAB 分析。记录期不打串口，不阻塞控制环。
+
 ## 目录结构
 
 ```
 .
-├── cpu0_main.c      # CPU0 主循环（实时链）
-├── cpu1_main.c      # CPU1 主循环（人机界面）
-├── shared.h / .c    # 双核共享数据
+├── cpu0_main.c      # 主循环（相机 + 图像 + 控制 + 电机 + 菜单 + 屏幕）
+├── cpu1_main.c      # CPU1 占位（空循环）
 ├── image.c / .h     # 图像处理与巡线
 ├── control.c / .h   # PD 控制
-├── motor.c / .h     # PWM 驱动
+├── motor.c / .h     # PWM 驱动与 hal_time_us()
+├── telemetry.c / .h # 整圈 RAM 记录 + CSV 导出
 ├── menu.c / .h      # 菜单框架
 ├── menu_config.c    # 菜单项定义
 ├── menu_port.c / .h # 按键与屏幕端口
@@ -81,6 +75,7 @@ MT9V034 帧 → image.c（二值化 + 边线 + 误差）
 | Stop Time | Armed 超时（秒） |
 | Lost Fr | 连续丢线帧数阈值（触发锁死） |
 | Race Preset | 加载比赛预设 |
+| Dump Log | 停车后导出 CSV 到调试串口 |
 | Camera | 实时灰度图 + 边线叠加调试 |
 
 按键：UP/DOWN 移动，ENTER 进入/确认，BACK 返回。长按 ENTER 切换 Fine Step 微调步长。
@@ -99,7 +94,6 @@ MT9V034 帧 → image.c（二值化 + 边线 + 误差）
 
 - **丢线保护** — `aim_row == 0` 连续超过 Lost Fr 帧后锁死驱动，须撤销 Armed 才能恢复
 - **Armed 超时** — Stop Time 到期自动停车
-- **CPU1 看门狗** — CPU1 主循环心跳停止超过 500 ms 同样锁死驱动
 
 ## 开发约定
 

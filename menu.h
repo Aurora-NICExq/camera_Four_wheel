@@ -44,6 +44,7 @@ void menu_action_align_test(void);
 void menu_action_motor_test(void);
 void menu_action_left_test(void);
 void menu_action_reset(void);
+void menu_action_dump_log(void);
 
 uint8_t menu_camera_view(void);
 uint8_t menu_align_test_mode(void);

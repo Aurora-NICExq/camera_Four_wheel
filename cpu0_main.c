@@ -5,6 +5,7 @@
 #include "menu.h"
 #include "motor.h"
 #include "menu_port.h"
+#include "telemetry.h"
 #include "zf_common_headfile.h"
 
 #pragma section all "cpu0_dsram"
@@ -28,6 +29,8 @@ int core0_main(void) {
   uint32_t armed_last_us = 0;
   uint8_t armed_t0_set = 0;
   uint8_t drive_en = 1;
+  uint8_t log_active = 0;     /* Armed 起始置 1,撤 Armed 才清 */
+  uint16_t log_postroll = 0;  /* 已经记了多少帧"非正常发车"的收尾数据 */
   control_out_t out = {0};
 
   while (TRUE) {
@@ -63,6 +66,8 @@ int core0_main(void) {
 
     //电机的处理
 
+    uint8_t run_frame = 0; /* 本帧是否走了"正常发车"分支,下面记录用 */
+
     if (menu_motor_test_mode()) {
       motor_apply(SERVO_CENTER, MOTOR_TEST_DUTY);
     } else if (menu_left_test_mode()) {
@@ -71,9 +76,18 @@ int core0_main(void) {
       motor_apply_servo_only(out.servo_pwm);
     } else if (drive_en && drive_armed) {  //正常发车
       uint32_t now_us = hal_time_us();
+      run_frame = 1; /* 本帧走的是发车分支:计时在推进,记录按正常速度吃 */
       if (!armed_t0_set) {
         armed_t0_set = 1;
         armed_elapsed_us = 0;
+        /* 从 Armed 那一刻就开始记,不等发车延时结束。发车延时里如果
+           触发了丢线保护(车停在起跑线上取不到有效行),下面那个
+           motor_apply 分支永远到不了 —— 记录起点放在那里的话,
+           这一趟会一帧都没有,而那正是你要查"为什么不发车"的数据。
+           代价是多记 2 秒 × 50fps = 100 帧 duty=0,占缓冲 3%。 */
+        log_active = 1;
+        log_postroll = 0;
+        telemetry_start();
       } else {
         uint32_t dt = now_us - armed_last_us;
         if (dt > DRIVE_DT_CLAMP_US) {
@@ -103,9 +117,25 @@ int core0_main(void) {
       }
     }
 
+    /* 数据记录。放在电机处理之后、按整帧记,和控制看到的是同一批数据。
+       run_frame=0 的帧(丢线锁死、或者中途进了电机/舵机测试)照记
+       TELEM_POSTROLL_FRAMES 帧收尾就停 —— 触发瞬间的后续要留,但不能
+       让它一直记到缓冲写满。跑完(drive_timed_out)直接停。
+       撤 Armed 只停记录,不清数据,等 Dump Log 取走。 */
+    if (log_active && !drive_timed_out) {
+      if (run_frame) {
+        log_postroll = 0;
+        telemetry_log(&g_track, &out, drive_en);
+      } else if (log_postroll < (uint16_t)TELEM_POSTROLL_FRAMES) {
+        log_postroll++;
+        telemetry_log(&g_track, &out, drive_en);
+      }
+    }
+
     if (!drive_armed) {
       armed_t0_set = 0;
       drive_timed_out = 0;
+      log_active = 0;
       /* 丢线锁死只在撤销 Armed 时解除,和发车超时同一个粒度。
          想改成"只有断电才解除",把下面两行删掉即可 */
       fail_cnt = 0;

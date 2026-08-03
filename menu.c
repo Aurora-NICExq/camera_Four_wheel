@@ -4,6 +4,7 @@
 #include "control.h"
 #include "image.h"
 #include "motor.h"
+#include "telemetry.h"
 
 extern volatile float    steer_kp;
 volatile uint8_t menu_fine_step = 0;
@@ -62,6 +63,10 @@ static uint8_t           s_camera_view;
 static uint8_t           s_align_test_mode;
 static uint8_t           s_motor_test_mode;
 static uint8_t           s_left_test_mode;
+/* Dump Log 结果页。凡是 menu_port_clear() 擦掉列表的页面都必须有自己的
+   模式标志 —— menu_handle_key 按标志分发,没标志就落进 NAV_LIST 分支,
+   而那里没有 BACK,等于退不出去。 */
+static uint8_t           s_dump_view;
 static uint8_t           s_preset_cursor;       // 预设子页面选中档位
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
@@ -354,6 +359,50 @@ void menu_action_reset(void)
     draw_title("Reset");
 }
 
+/* 把整圈数据打成 CSV 从调试串口吐出去。阻塞几秒(25 s 的数据约 5 秒),
+   期间不刷屏也不扫按键 —— 所以必须先确认车是停的。 */
+void menu_action_dump_log(void)
+{
+    s_align_test_mode = 0;
+    s_motor_test_mode = 0;
+    s_left_test_mode  = 0;
+    s_camera_view = 0;
+    s_dump_view = 1;      /* 擦了列表就必须占一个模式,否则 BACK 退不回去 */
+    motor_stop();
+
+    menu_port_clear();
+    draw_title("Dump Log");
+
+    menu_port_draw_text(0, 7, "BACK to exit", MENU_STYLE_NORMAL);
+
+    if (drive_armed)
+    {
+        /* Armed 还开着就吐数据,等于一边跑一边卡死主循环几秒 */
+        menu_port_draw_text(0, 2, "Armed is ON", MENU_STYLE_NORMAL);
+        menu_port_draw_text(0, 3, "Turn it off first", MENU_STYLE_NORMAL);
+        return;
+    }
+    if (telemetry_count() == 0u)
+    {
+        menu_port_draw_text(0, 2, "No data", MENU_STYLE_NORMAL);
+        menu_port_draw_text(0, 4, "Run a lap first", MENU_STYLE_NORMAL);
+        return;
+    }
+
+    menu_port_draw_text(0, 2, "Frames:", MENU_STYLE_NORMAL);
+    menu_port_draw_uint(8, 2, telemetry_count(), 5, MENU_STYLE_NORMAL);
+    if (telemetry_overflow())
+    {
+        /* 缓冲写满被截断。不显示出来的话你会以为拿到的是整圈 */
+        menu_port_draw_text(0, 3, "TRUNCATED!", MENU_STYLE_NORMAL);
+    }
+    menu_port_draw_text(0, 5, "Sending...", MENU_STYLE_NORMAL);
+
+    telemetry_dump();
+
+    menu_port_draw_text(0, 5, "Done      ", MENU_STYLE_NORMAL);
+}
+
 uint8_t menu_camera_view(void)
 {
     return s_camera_view;
@@ -405,6 +454,16 @@ static void menu_handle_key(const menu_key_event_t *ev)
         {
             s_left_test_mode = 0;
             motor_stop();
+            draw_list_full();
+        }
+        return;
+    }
+
+    if (s_dump_view)
+    {
+        if (ev->key == MENU_KEY_BACK)
+        {
+            s_dump_view = 0;
             draw_list_full();
         }
         return;

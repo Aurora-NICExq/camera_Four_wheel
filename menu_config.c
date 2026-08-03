@@ -27,6 +27,7 @@ const menu_item_t menu_items[] = {
     MENU_U16("Lost Fr",     drive_failsafe_frames, FAILSAFE_FRAMES_MIN, FAILSAFE_FRAMES_MAX, 1, FAILSAFE_FRAMES_DEFAULT),
     MENU_ACTION("Race Preset",  menu_action_race_preset),
     MENU_ACTION("Reset",        menu_action_reset),
+    MENU_ACTION("Dump Log",     menu_action_dump_log),
     MENU_ACTION("Camera",       menu_action_camera),
     MENU_ACTION("Align Test",   menu_action_align_test),
     MENU_ACTION("Motor Test",   menu_action_motor_test),

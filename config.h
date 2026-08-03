@@ -85,6 +85,32 @@
 #define FAILSAFE_FRAMES_MIN (1)
 #define FAILSAFE_FRAMES_MAX (60)
 
+/* 跑车数据记录(telemetry.c)
+ *
+ * 一条记录 16 字节,每帧一条。相机 50 fps → 800 B/s:
+ *
+ *     TELEM_MAX_FRAMES   RAM      可记录时长
+ *          2048          32 KB      41 s
+ *          3072          48 KB      61 s      ← 默认
+ *          4096          64 KB      82 s
+ *
+ * 一圈按 Stop Time 预设是 22~25 s,默认值有 2.4 倍余量。
+ * 线性缓冲不是环形:写满就停并置 overflow,拿到的一定是从发车第 0 帧
+ * 开始的连续序列。宁可截断且明说,也不要默默覆盖开头。
+ *
+ * CPU0 的 DSPR 是 120 KB,image.c 的静态量(image_bin 22.5 KB + 边线/
+ * 爬线数组)已占约 27 KB。若 ADS 链接报 dsram 放不下,把这个数改小。 */
+#define TELEM_MAX_FRAMES (3072)
+
+/* 跑车结束后还要再记多少帧。
+ *
+ * 丢线保护锁死之后 armed_elapsed_us 不再累加(那段计时在 drive_en 的
+ * 分支里),drive_timed_out 就永远不会置位。没有这个上限的话,记录会
+ * 一直跑到缓冲写满 —— 你捡车那 40 秒会灌进 2000 帧静止数据,把
+ * overflow 顶起来,让你以为整圈数据被截断了(其实被挤掉的全是垃圾)。
+ * 50 帧 @50fps = 1 秒,够看清触发瞬间的后续,又不至于淹掉有用数据。 */
+#define TELEM_POSTROLL_FRAMES (50)
+
 #define MOTOR_PWM_FREQ (17000)
 
 #define KEY_SCAN_PERIOD_MS (5)
