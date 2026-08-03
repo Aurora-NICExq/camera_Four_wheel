@@ -33,6 +33,44 @@
 #endif
 #define ERR_HOLD_MAX_FRAMES (20)
 
+/* 直道/弯道判别:拟合中线相对屏幕中线的方差(实验中,未上车标定)
+ *
+ *   var = Σ(mid[tr] - IMG_CENTER)² / n   单位:像素²
+ *
+ * 窗口 = 转向用的同一个前瞻窗口 tr ∈ [1, Look Far],刻意不另开一个
+ * 行范围参数:判据要说的是"你正在拿来转向的那段中线弯不弯"。
+ * 只统计非双边丢线行,n(= mid_var_rows)一并输出 —— 参与行数会随视野
+ * 剧烈变化,不报出来就是不可观测的降级(R6)。
+ *
+ * 同时算一个相对样本自身均值的方差 mid_var_ac(= var - mean²),只上屏
+ * 不参与判据,用途是回答"var 大到底是因为弯,还是因为车横偏":
+ *   直道居中     var 小,   var_ac 小
+ *   直道横偏 10px var≈100, var_ac 小     ← 若实测常见此形态,判据应改用 var_ac
+ *   真弯道       var 大,   var_ac 也大
+ *
+ * 合成中线跑出来的量级(Look Far=115,窗口 115 行):
+ *   直道居中          VAR    0   VRM   0
+ *   直道横偏 10px     VAR  100   VRM   0
+ *   中线扫到 -60px    VAR 1186   VRM 345
+ *   中线扫到 -90px    VAR 2692   VRM 756
+ *
+ * ★ 阈值不跨 Look Far 通用:同一条"扫到 -60px"的弯,Look Far=40 时
+ *   VAR 只有 140(窗口短 → 远端大偏差根本没进统计)。改 Look Far 必须
+ *   重新标 Var Th。三档预设的 Look Far 是 75,默认值是 115,两者的
+ *   Var Th 不是一个数 —— 这是把窗口挂在 Look Far 上换来的代价,
+ *   换来的是不用再多一个"方差窗口"参数。若实测觉得这个耦合更烦,
+ *   下一步就把窗口写死成固定行区间,而不是给它加系数。
+ *
+ * CURVE_VAR_TH_DEFAULT 取 400 是占位值,不是标定值(≈ 平均偏离 20px)。
+ * 上车先在 Camera 页读直道/弯道各自的 VAR,再决定阈值 —— 在能回答
+ * "直道跑到多少、弯道跑到多少"之前这个数没有意义(R2),所以它进菜单
+ * 的唯一理由就是做这次实验。
+ * 判别结果 is_curve 当前不接入任何控制,只上屏。
+ * CURVE_VAR_MIN_ROWS:参与行数不足时本帧不判别(is_curve 置 0)。 */
+#define CURVE_VAR_TH_DEFAULT (400)
+#define CURVE_VAR_MIN_ROWS (10)
+#define CURVE_VAR_MAX (IMG_CENTER * IMG_CENTER)
+
 #define EIGHTN_START_ROW (IMG_H - 2)
 #define EIGHTN_BORDER_MIN (1)
 #define EIGHTN_BORDER_MAX (IMG_W - 2)

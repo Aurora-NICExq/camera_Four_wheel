@@ -6,6 +6,7 @@
 volatile int16_t image_threshold = 0;
 volatile uint8_t image_cross_fill = 1;
 volatile uint16_t steer_look_far = STEER_LOOK_FAR_DEFAULT; // 前瞻
+volatile uint16_t curve_var_th = CURVE_VAR_TH_DEFAULT;     // 直/弯方差阈值
 
 #define IMG_WHITE (0xFFu)
 #define IMG_BLACK (0x00u)
@@ -674,6 +675,60 @@ static int16_t look_ahead_error(const track_info_t *ti, uint8_t *aim_tr_out) {
   return g_err_hold;
 }
 
+/* 直道/弯道判别:中线相对屏幕中线的方差。窗口与 look_ahead_error 完全一致
+   (tr ∈ [1, Look Far]),只吃非双边丢线行。设计意图见 config.h CURVE_VAR_*。
+
+   注意:单边丢线行的 mid 是拿被钳到画面边界的假边界算出来的,会往方差里
+   灌一个大偏差。这里不做特殊处理 —— 转向误差本来就吃同一批 mid,判据必须
+   和被判据的对象看同一幅图,否则"方差大"和"转不过来"对不上号。
+   代价是入弯时 var 会被假边界抬高;这一路的贡献量可以由 mid_var_rows 掉多少
+   间接看出来。 */
+static void mid_variance(track_info_t *ti) {
+  uint16_t far = steer_look_far;
+  uint8_t tr0 = (uint8_t)TR_ROW(EIGHTN_START_ROW);
+  uint16_t tr;
+  int32_t sum = 0;
+  int32_t sum2 = 0;
+  uint16_t n = 0;
+
+  if (far > (uint16_t)STEER_LOOK_FAR_MAX) {
+    far = (uint16_t)STEER_LOOK_FAR_MAX;
+  }
+
+  for (tr = tr0; tr <= far; tr++) {
+    int32_t d;
+    if (ti->left_lost[tr] && ti->right_lost[tr]) {
+      continue;
+    }
+    d = (int32_t)ti->mid[tr] - IMG_CENTER;
+    sum += d;
+    sum2 += d * d;
+    n++;
+  }
+
+  ti->mid_var_rows = (uint8_t)((n > 255u) ? 255u : n);
+
+  if (n < (uint16_t)CURVE_VAR_MIN_ROWS) {
+    ti->mid_var = 0;
+    ti->mid_var_ac = 0;
+    ti->is_curve = 0;
+    return;
+  }
+
+  {
+    int32_t var = sum2 / (int32_t)n;
+    int32_t mean = sum / (int32_t)n;
+    int32_t var_ac = var - mean * mean; /* 两次整除截断可能让它略微为负 */
+
+    if (var_ac < 0) {
+      var_ac = 0;
+    }
+    ti->mid_var = (uint16_t)var;
+    ti->mid_var_ac = (uint16_t)var_ac;
+    ti->is_curve = (uint8_t)(var >= (int32_t)curve_var_th);
+  }
+}
+
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
   uint8_t th;
   uint8_t aim_tr;
@@ -707,6 +762,7 @@ void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out) {
   out->error = look_ahead_error(out, &aim_tr);
   out->aim_row = aim_tr;
   out->err_hold = g_hold_frames;
+  mid_variance(out);
 }
 
 static void debug_draw_seg(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,

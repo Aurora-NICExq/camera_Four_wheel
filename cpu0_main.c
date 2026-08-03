@@ -132,6 +132,16 @@ int core0_main(void) {
       ips200_show_uint(32, IMG_H + 68, g_track.err_hold, 3);
       ips200_show_string(104, IMG_H + 68, "FAR");
       ips200_show_uint(136, IMG_H + 68, steer_look_far, 3);
+      /* 直/弯方差:VAR 判据本体,VRM 去掉横偏后的方差(诊断),
+         NR 参与行数(< CURVE_VAR_MIN_ROWS 时 VAR/VRM/CRV 无意义) */
+      ips200_show_string(0, IMG_H + 84, "VAR");
+      ips200_show_uint(32, IMG_H + 84, g_track.mid_var, 4);
+      ips200_show_string(104, IMG_H + 84, "VRM");
+      ips200_show_uint(136, IMG_H + 84, g_track.mid_var_ac, 4);
+      ips200_show_string(0, IMG_H + 100, "CRV");
+      ips200_show_uint(32, IMG_H + 100, g_track.is_curve, 1);
+      ips200_show_string(104, IMG_H + 100, "NR");
+      ips200_show_uint(136, IMG_H + 100, g_track.mid_var_rows, 3);
     }
     mt9v03x_finish_flag = 0;
   }
