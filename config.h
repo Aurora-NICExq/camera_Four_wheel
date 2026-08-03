@@ -12,11 +12,6 @@
 #define DRIVE_DT_CLAMP_US (200000u)
 #define DRIVE_DT_NOMINAL_US (20000u)
 
-// 双核分工:CPU0 = 相机+图像+控制+电机,CPU1 = 按键+菜单+屏幕(见 shared.h)。
-// CPU1 卡死不再拖停主循环,所以 CPU0 要盯它的心跳。阈值必须远大于 CPU1
-// 画一帧灰度图的耗时(十几毫秒量级),否则一进 Camera 页就误锁死。
-#define CPU1_ALIVE_TIMEOUT_US (500000u)
-
 #define FIXED_THRESHOLD (128)
 #define OTSU_ROW_STEP (2)
 #define OTSU_COL_STEP (2)

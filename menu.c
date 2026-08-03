@@ -1,14 +1,9 @@
 /* menu.c */
-/* menu.c 在 CPU1 上运行。电机和 control.c 的内部状态归 CPU0 独占,
-   本文件只写调参量(都是 volatile 标量)和请求标志,不直接调 motor / control 的函数。
-   切换测试模式时不用在这里停电机:CPU0 下一帧读到模式标志变了会自己 motor_reset()。
-   本文件不加 #pragma section:静态量留在默认段(CPU0 DSPR),CPU1 跨核访问。
-   菜单本来就是 SPI 屏限速的,这点访问延迟看不出来,换来的是 CPU0 读模式标志是本地访问。 */
 #include "menu.h"
 #include "menu_port.h"
 #include "control.h"
 #include "image.h"
-#include "shared.h"
+#include "motor.h"
 
 extern volatile float    steer_kp;
 volatile uint8_t menu_fine_step = 0;
@@ -63,12 +58,10 @@ static const preset_t s_presets[PRESET_COUNT] = {
 };
 
 static nav_state_e       s_nav;
-/* 下面四个模式标志本核(CPU1)写、CPU0 每帧读来决定电机怎么走。
-   必须 volatile:否则 CPU0 那边可能把读到的值缓存在寄存器里,按了键不生效。 */
-static volatile uint8_t  s_camera_view;
-static volatile uint8_t  s_align_test_mode;
-static volatile uint8_t  s_motor_test_mode;
-static volatile uint8_t  s_left_test_mode;
+static uint8_t           s_camera_view;
+static uint8_t           s_align_test_mode;
+static uint8_t           s_motor_test_mode;
+static uint8_t           s_left_test_mode;
 static uint8_t           s_preset_cursor;       // 预设子页面选中档位
 static uint8_t           s_cursor;              // 选中项索引
 static uint8_t           s_top;                 // 滚动窗口顶
@@ -321,6 +314,7 @@ void menu_action_align_test(void)
     s_left_test_mode  = 0;
     s_align_test_mode = 1;
     s_camera_view = 1;
+    motor_stop();
 }
 
 void menu_action_motor_test(void)
@@ -329,6 +323,7 @@ void menu_action_motor_test(void)
     s_left_test_mode  = 0;
     s_camera_view = 0;
     s_motor_test_mode = 1;
+    motor_stop();
     menu_port_clear();
     draw_title("Motor Test");
     menu_port_draw_text(0, 2, "Duty: 20%", MENU_STYLE_NORMAL);
@@ -342,6 +337,7 @@ void menu_action_left_test(void)
     s_motor_test_mode = 0;
     s_camera_view = 0;
     s_left_test_mode = 1;
+    motor_stop();
     menu_port_clear();
     draw_title("Left Test");
     menu_port_draw_text(0, 2, "Only LEFT PWM", MENU_STYLE_NORMAL);
@@ -353,7 +349,8 @@ void menu_action_left_test(void)
 
 void menu_action_reset(void)
 {
-    shared_ctrl_reset_req = 1;   /* 由 CPU0 执行 control_init() + motor_reset() */
+    control_init();
+    motor_reset();
     draw_title("Reset");
 }
 
@@ -395,7 +392,8 @@ static void menu_handle_key(const menu_key_event_t *ev)
     {
         if (ev->key == MENU_KEY_BACK)
         {
-            s_motor_test_mode = 0;   /* CPU0 下一帧就会 motor_reset() */
+            s_motor_test_mode = 0;
+            motor_stop();
             draw_list_full();
         }
         return;
@@ -405,7 +403,8 @@ static void menu_handle_key(const menu_key_event_t *ev)
     {
         if (ev->key == MENU_KEY_BACK)
         {
-            s_left_test_mode = 0;    /* CPU0 下一帧就会 motor_reset() */
+            s_left_test_mode = 0;
+            motor_stop();
             draw_list_full();
         }
         return;

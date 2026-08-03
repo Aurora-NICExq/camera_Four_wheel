@@ -31,12 +31,6 @@ extern volatile uint8_t image_cross_fill;
 extern volatile uint16_t steer_look_far;
 
 void image_process(const uint8_t img[IMG_H][IMG_W], track_info_t *out);
-
-/* 把本帧二值图拷出去。给 CPU0 填共享调试帧用,CPU1 不要调(image_bin 是
-   CPU0 的私有中间结果,跨核直接读会拿到正在被覆写的半帧)。 */
-void image_copy_bin(uint8_t dst[IMG_H][IMG_W]);
-
-/* 在 CPU1 上执行:只吃入参,不碰 image.c 的任何静态量。 */
-void image_debug_show(const uint8_t gray[IMG_H][IMG_W], const track_info_t *ti);
+void image_debug_show(const track_info_t *ti);
 
 #endif /* IMAGE_H */
